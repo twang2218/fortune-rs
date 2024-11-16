@@ -12,7 +12,7 @@ The `fortune` program is a simple program that displays a random message from a 
 
 - [ ] Basic functionality;
   - [x] Read the fortune a cookies file and display a random message;
-  - [ ] Implement the `strfile` program to create the index file;
+  - [x] Implement the `strfile` program to create the index file;
   - [ ] Read the fortune the cookie file along with the `strfile` index file;
   - [x] Read the cookie files from a directory recursively;
 - [ ] Implement traditional fortune options;
