@@ -1,4 +1,3 @@
-use std::fmt::Display;
 
 /// Converts a u64 value to network byte order (big-endian) and returns it as a byte array.
 /// This function mimics the behavior of the original C implementation's htonl() function.
@@ -104,7 +103,7 @@ impl Default for CookieMetadata {
     }
 }
 
-impl Display for CookieMetadata {
+impl std::fmt::Display for CookieMetadata {
     /// Formats the CookieMetadata struct for display.
     /// Shows the header fields and quote offsets.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -142,6 +141,46 @@ impl Display for CookieMetadata {
         write!(f, "}}")
     }
 }
+
+impl CookieMetadata {
+    /// Loads the metadata from a fortune cookie file.
+    /// Parses the file content and extracts the metadata fields.
+    /// The file content is expected to be in the format of a fortune cookie file.
+    /// The delimiter character is set to '%' by default.
+    /// # Arguments
+    /// * `filename` - The path to the fortune cookie file
+    pub fn load_from_cookie_file(&mut self, filename: &str) {
+        let content = std::fs::read_to_string(filename).unwrap_or_else(|_| {
+            eprintln!("Error reading cookie file: {}", filename);
+            std::process::exit(1);
+        });
+        // Split content by delimiter pattern
+        let splitter = format!("\n{}\n", self.delim);
+        let parts: Vec<&str> = content.split(splitter.as_str()).collect();
+        let mut offset = 0;
+
+        // Process each quote, tracking offsets and updating metaself
+        for part in &parts {
+            if part.trim().is_empty() {
+                continue;
+            }
+            self.quotes.push(Quote {
+                content: part.to_string(),
+                offset: offset,
+            });
+            let len = part.len() as u64 + 1; // 1 = len('\n')
+            offset += len + 2; // 2 = len('%\n')
+                            // Update max_length and min_length
+            self.max_length = self.max_length.max(len);
+            if len > 1 {
+                self.min_length = self.min_length.min(len);
+            }
+        }
+        self.num_quotes = self.quotes.len() as u64;
+        self.file_size = content.len() as u64;
+    }
+}
+
 
 /// Trait defining the interface for serializing and deserializing CookieMetadata
 /// for different platform formats (Homebrew, Linux, FreeBSD).
@@ -380,39 +419,4 @@ impl Serializer {
             _ => SerializerType::Linux, // Default to Linux format
         }
     }
-}
-
-/// Parses a fortune cookie text file and returns a CookieMetadata.
-/// Splits the file content by delimiter and calculates metadata.
-/// This function is used by the strfile utility to generate the data file.
-/// It is not used by the main fortune program.
-/// 
-/// # Arguments
-/// * `content` - The content of the fortune cookie file
-/// * `data` - The CookieMetadata struct to populate with parsed data
-pub fn parse_cookie_metadata(content: &str, data: &mut CookieMetadata) {
-    // Split content by delimiter pattern
-    let splitter = format!("\n{}\n", data.delim);
-    let parts: Vec<&str> = content.split(splitter.as_str()).collect();
-    let mut offset = 0;
-
-    // Process each quote, tracking offsets and updating metadata
-    for part in &parts {
-        if part.trim().is_empty() {
-            continue;
-        }
-        data.quotes.push(Quote {
-            content: part.to_string(),
-            offset: offset,
-        });
-        let len = part.len() as u64 + 1; // 1 = len('\n')
-        offset += len + 2; // 2 = len('%\n')
-                           // Update max_length and min_length
-        data.max_length = data.max_length.max(len);
-        if len > 1 {
-            data.min_length = data.min_length.min(len);
-        }
-    }
-    data.num_quotes = data.quotes.len() as u64;
-    data.file_size = content.len() as u64;
 }

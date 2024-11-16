@@ -1,15 +1,12 @@
 pub mod metadata;
 
 use clap::{Arg, Command};
-// use metadata::{
-//     CookieMetadata, Quote, Serialize, SerializerFreeBSD, SerializerHomebrew, SerializerLinux,
-//     SerializerType, FLAGS_ORDERED, FLAGS_RANDOMIZED, FLAGS_ROTATED,
-// };
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use std::io;
 use std::io::Write;
 use std::process;
+use metadata::{CookieMetadata, Serializer};
 
 /// Configuration options parsed from command line arguments.
 #[derive(Default)]
@@ -127,9 +124,9 @@ fn main() -> io::Result<()> {
             eprintln!("Error reading data file: {}", cfg.outfile);
             process::exit(1);
         });
-        let data = metadata::Serializer::from_bytes(
+        let data = Serializer::from_bytes(
             &bytes,
-            metadata::Serializer::get_type_by_bytes(&bytes),
+            Serializer::get_type_by_bytes(&bytes),
         );
         println!("File: {}", cfg.outfile);
         println!("{}", data);
@@ -137,13 +134,9 @@ fn main() -> io::Result<()> {
     }
 
     // Parse input cookie file
-    let content = std::fs::read_to_string(&cfg.infile).unwrap_or_else(|_| {
-        eprintln!("Error reading cookie file: {}", cfg.infile);
-        process::exit(1);
-    });
-    let mut data = metadata::CookieMetadata::default();
+    let mut data = CookieMetadata::default();
     data.delim = cfg.delimch;
-    metadata::parse_cookie_metadata(&content, &mut data);
+    data.load_from_cookie_file(&cfg.infile);
 
     // Apply ordering if -o flag is set
     if cfg.oflag {
@@ -169,9 +162,9 @@ fn main() -> io::Result<()> {
     }
 
     // Write output data file
-    let bytes = metadata::Serializer::to_bytes(
+    let bytes = Serializer::to_bytes(
         &data,
-        metadata::Serializer::get_type_by_name(&cfg.platform.as_str()),
+        Serializer::get_type_by_name(&cfg.platform.as_str()),
     );
     let mut f = std::fs::OpenOptions::new()
         .write(true)
