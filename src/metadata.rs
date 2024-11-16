@@ -179,6 +179,21 @@ impl CookieMetadata {
         self.num_quotes = self.quotes.len() as u64;
         self.file_size = content.len() as u64;
     }
+
+    pub fn from_dat(filename: &str) -> CookieMetadata {
+        if !filename.ends_with(".dat") {
+            eprintln!("Error: Invalid data file: {}", filename);
+            std::process::exit(1);
+        }
+        let bytes = std::fs::read(filename).unwrap_or_else(|_| {
+            eprintln!("Error reading cookie database: {}", filename);
+            std::process::exit(1);
+        });
+
+        let t = Serializer::get_type_by_bytes(&bytes);
+        let data = Serializer::from_bytes(&bytes, t);
+        data
+    }
 }
 
 

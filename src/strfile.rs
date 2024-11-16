@@ -120,14 +120,7 @@ fn main() -> io::Result<()> {
 
     // If -l flag is set, load and display data file
     if cfg.lflag {
-        let bytes = std::fs::read(&cfg.outfile).unwrap_or_else(|_| {
-            eprintln!("Error reading data file: {}", cfg.outfile);
-            process::exit(1);
-        });
-        let data = Serializer::from_bytes(
-            &bytes,
-            Serializer::get_type_by_bytes(&bytes),
-        );
+        let data = CookieMetadata::from_dat(&cfg.outfile);
         println!("File: {}", cfg.outfile);
         println!("{}", data);
         return Ok(());

@@ -10,10 +10,10 @@ The `fortune` program is a simple program that displays a random message from a 
 
 ## Roadmap
 
-- [ ] Basic functionality;
+- [x] Basic functionality;
   - [x] Read the fortune a cookies file and display a random message;
   - [x] Implement the `strfile` program to create the index file;
-  - [ ] Read the fortune the cookie file along with the `strfile` index file;
+  - [x] Read the fortune the cookie file along with the `strfile` index file;
   - [x] Read the cookie files from a directory recursively;
 - [ ] Implement traditional fortune options;
   - [ ] `-a` - Choose from all lists of maxims, both offensive and not.  (See the -o option for more information on offensive fortunes.)
