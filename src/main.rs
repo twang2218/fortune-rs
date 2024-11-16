@@ -1,3 +1,5 @@
+pub mod metadata;
+
 use anyhow::{Context, Result};
 use clap::Parser;
 use rand::seq::SliceRandom;

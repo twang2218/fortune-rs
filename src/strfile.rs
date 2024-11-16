@@ -1,4 +1,4 @@
-mod metadata;
+pub mod metadata;
 
 use clap::{Arg, Command};
 // use metadata::{
