@@ -1,3 +1,5 @@
+use std::path::{Path, PathBuf};
+
 
 /// Converts a u64 value to network byte order (big-endian) and returns it as a byte array.
 /// This function mimics the behavior of the original C implementation's htonl() function.
@@ -74,6 +76,7 @@ pub struct Quote {
 /// Represents the header structure of a fortune cookie data file.
 /// This header contains metadata about the fortune cookie strings.
 pub struct CookieMetadata {
+    pub path: PathBuf,       // Path to the source file
     pub platform: String, // Platform to use for serialization, one of: homebrew, linux, freebsd
     pub version: u64,     // Data file format version
     pub num_quotes: u64,  // Number of strings in file
@@ -90,6 +93,7 @@ impl Default for CookieMetadata {
     /// Sets delimiter to '%'.
     fn default() -> Self {
         Self {
+            path: Path::new("").to_path_buf(),
             platform: "".to_string(),
             version: 0,
             num_quotes: 0,
@@ -108,6 +112,7 @@ impl std::fmt::Display for CookieMetadata {
     /// Shows the header fields and quote offsets.
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "CookieMetadata {{\n")?;
+        write!(f, "  path: '{}'\n", self.path.display())?;
         write!(f, "  platform: '{}'\n", self.platform)?;
         write!(f, "  version: {}\n", self.version)?;
         write!(f, "  num_quotes: {}\n", self.num_quotes)?;
@@ -154,6 +159,7 @@ impl CookieMetadata {
             eprintln!("Error reading cookie file: {}", filename);
             std::process::exit(1);
         });
+        self.path = Path::new(filename).to_path_buf(); // use the filename without .dat extension
         // Split content by delimiter pattern
         let splitter = format!("\n{}\n", self.delim);
         let parts: Vec<&str> = content.split(splitter.as_str()).collect();
@@ -191,7 +197,8 @@ impl CookieMetadata {
         });
 
         let t = Serializer::get_type_by_bytes(&bytes);
-        let data = Serializer::from_bytes(&bytes, t);
+        let mut data = Serializer::from_bytes(&bytes, t);
+        data.path = Path::new(filename).with_extension("").to_path_buf(); // Remove .dat extension
         data
     }
 }
@@ -234,6 +241,7 @@ impl Serialize for SerializerHomebrew {
     fn from_bytes(bytes: &Vec<u8>) -> CookieMetadata {
         let mut data = CookieMetadata {
             // Metadata fields
+            path: Path::new("").to_path_buf(),
             platform: "homebrew".to_string(),
             version: u64_ntohl_from_bytes(bytes[0..8].try_into().unwrap()),
             num_quotes: u64_ntohl_from_bytes(bytes[8..16].try_into().unwrap()),
@@ -287,6 +295,7 @@ impl Serialize for SerializerLinux {
     fn from_bytes(bytes: &Vec<u8>) -> CookieMetadata {
         let mut data = CookieMetadata {
             // Metadata fields
+            path: Path::new("").to_path_buf(),
             platform: "linux".to_string(),
             version: u32::from_be_bytes(bytes[0..4].try_into().unwrap()) as u64,
             num_quotes: u32::from_be_bytes(bytes[4..8].try_into().unwrap()) as u64,
@@ -345,6 +354,7 @@ impl Serialize for SerializerFreeBSD {
     fn from_bytes(bytes: &Vec<u8>) -> CookieMetadata {
         let mut data = CookieMetadata {
             // Metadata fields
+            path: Path::new("").to_path_buf(),
             platform: "freebsd".to_string(),
             version: u32::from_be_bytes(bytes[0..4].try_into().unwrap()) as u64,
             num_quotes: u32::from_be_bytes(bytes[4..8].try_into().unwrap()) as u64,

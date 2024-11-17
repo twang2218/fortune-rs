@@ -1,8 +1,8 @@
 pub mod metadata;
 
-use anyhow::{Result};
-use glob::glob;
+use anyhow::Result;
 use clap::Parser;
+use glob::glob;
 use metadata::{CookieMetadata, Quote};
 use rand::seq::SliceRandom;
 use std::path::{Path, PathBuf};
@@ -20,46 +20,63 @@ struct Args {
     /// Show the source file of the fortune
     #[arg(short, long)]
     file: bool,
+
+    /// Only load cookies without loading metadata
+    /// This is useful for loading cookies from a directory without strfile processed files
+    #[arg(short, long)]
+    text: bool,
 }
 
-// struct Fortune {
-//     text: String,
-//     source: PathBuf,
-// }
-
-// fn read_fortunes(path: &Path) -> Result<Vec<Fortune>> {
-//     let content = std::fs::read_to_string(path)
-//         .with_context(|| format!("Failed to read fortune file: {}", path.display()))?;
-
-//     // Split fortunes by % on a line by itself
-//     let fortunes: Vec<Fortune> = content
-//         .split("\n%\n")
-//         .map(|s| s.trim().to_string())
-//         .filter(|s| !s.is_empty())
-//         .map(|text| Fortune {
-//             text,
-//             source: path.to_path_buf(),
-//         })
-//         .collect();
-
-//     Ok(fortunes)
-// }
-
-fn find_cookie_files(path: &Path) -> Result<Vec<PathBuf>> {
+fn find_cookies_files_with_metadata(path: &Path) -> Result<Vec<PathBuf>> {
     if path.is_file() {
         return Ok(vec![path.to_path_buf()]);
     }
 
-    let mut cookie_files = Vec::new();
-    for entry in glob(&format!("{}/**/*.dat", path.to_string_lossy())).expect("Failed to find fortune database files") {
+    let mut cookie_files: Vec<PathBuf> = Vec::new();
+    for entry in glob(&format!("{}/**/*.dat", path.to_string_lossy()))
+        .expect("Failed to find fortune cookies database files")
+    {
         let path = entry?;
         if path.is_file() {
             let mut cookie_file = path.clone();
             cookie_file.set_extension("");
             if cookie_file.exists() {
-                // println!("cookie_file: {:?}", cookie_file);
                 cookie_files.push(cookie_file);
             }
+        }
+    }
+    if cookie_files.is_empty() {
+        anyhow::bail!(
+            "No fortune cookies files found in directory: {}",
+            path.display()
+        );
+    }
+
+    Ok(cookie_files)
+}
+
+fn find_cookies_with_metadata(path: &Path) -> Result<Vec<CookieMetadata>> {
+    let files = find_cookies_files_with_metadata(path)?;
+    let mut cookies: Vec<CookieMetadata> = Vec::new();
+    for file in files {
+        let data = CookieMetadata::from_dat(&file.with_extension("dat").to_string_lossy());
+        cookies.push(data);
+    }
+    Ok(cookies)
+}
+
+fn find_cookies_files_with_text(path: &Path) -> Result<Vec<PathBuf>> {
+    if path.is_file() {
+        return Ok(vec![path.to_path_buf()]);
+    }
+
+    let mut cookie_files: Vec<PathBuf> = Vec::new();
+    for entry in
+        glob(&format!("{}/**/*", path.to_string_lossy())).expect("Failed to find coookies files")
+    {
+        let path = entry?;
+        if path.is_file() && path.extension().unwrap_or_default() != "dat" {
+            cookie_files.push(path);
         }
     }
     if cookie_files.is_empty() {
@@ -67,6 +84,21 @@ fn find_cookie_files(path: &Path) -> Result<Vec<PathBuf>> {
     }
 
     Ok(cookie_files)
+}
+
+fn find_cookies_with_text(path: &Path) -> Result<Vec<CookieMetadata>> {
+    let files = find_cookies_files_with_text(path)?;
+    let mut cookies: Vec<CookieMetadata> = Vec::new();
+    for file in files {
+        let mut data = CookieMetadata::default();
+        data.load_from_cookie_file(&file.to_string_lossy());
+        // validate the data
+        if data.quotes.is_empty() || data.num_quotes < 2 {
+            continue;
+        }
+        cookies.push(data);
+    }
+    Ok(cookies)
 }
 
 fn main() -> Result<()> {
@@ -78,38 +110,38 @@ fn main() -> Result<()> {
     }
 
     // Collect all fortune files
-    let cookie_files = find_cookie_files(path)?;
-
-    // Read all fortunes from all files
-    // let mut all_cookies: Vec<Fortune> = Vec::new();
-    // for file in &cookie_files {
-    //     let fortunes = read_fortunes(file)?;
-    //     all_cookies.extend(fortunes);
-    // }
-
-    let mut all_cookies: Vec::<(PathBuf, Quote)> = Vec::new();
-    for file in &cookie_files {
-        let data = CookieMetadata::from_dat(&file.with_extension("dat").to_string_lossy());
-        for quote in data.quotes {
-            all_cookies.push((file.to_path_buf(), quote ));
+    if args.text {
+        // Load cookies without metadata
+        let cookies = find_cookies_with_text(path)?;
+        let quotes: Vec<(PathBuf, &Quote)> = cookies.iter().flat_map(|c| c.quotes.iter().map(|q| (c.path.clone(), q))).collect();
+        if quotes.is_empty() {
+            anyhow::bail!("No fortune cookies found in directory: {}", path.display());
         }
-    }
-
-    if all_cookies.is_empty() {
-        anyhow::bail!("No fortunes found in any of the files");
-    }
-
-    // Select and display a random fortune
-    let mut rng = rand::thread_rng();
-    if let Some((path, quote)) = all_cookies.choose(&mut rng) {
+        let (file, quote) = quotes.choose(&mut rand::thread_rng()).unwrap();
         if args.file {
-            println!("({})\n", path.display());
+            println!("({})\n", file.display());
+        }
+        println!("{}", quote.content);
+    } else {
+        // Load cookies with metadata
+        let cookies = find_cookies_with_metadata(path)?;
+        let quotes: Vec<(PathBuf, &Quote)> = cookies.iter().flat_map(|c| c.quotes.iter().map(|q| (c.path.clone(), q))).collect();
+        if quotes.is_empty() {
+            anyhow::bail!("No fortune cookies found in directory: {}", path.display());
+        }
+        let (file, quote) = quotes.choose(&mut rand::thread_rng()).unwrap();
+        if args.file {
+            println!("({})\n", file.display());
         }
         let mut data = CookieMetadata::default();
-        data.load_from_cookie_file(&path.to_string_lossy());
-        let quote = data.quotes.iter().find(|q| q.offset == quote.offset).unwrap();
+        data.load_from_cookie_file(&file.to_string_lossy());
+        let quote = data
+            .quotes
+            .iter()
+            .find(|q| q.offset == quote.offset)
+            .unwrap();
         println!("{}", quote.content);
-    }
+    };
 
     Ok(())
 }
