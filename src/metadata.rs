@@ -166,6 +166,7 @@ impl CookieMetadata {
         let mut offset = 0;
 
         // Process each quote, tracking offsets and updating metaself
+        self.quotes.clear();
         for part in &parts {
             if part.trim().is_empty() {
                 continue;
