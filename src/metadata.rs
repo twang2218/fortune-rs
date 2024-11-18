@@ -1,6 +1,5 @@
 use std::path::{Path, PathBuf};
 
-
 /// Converts a u64 value to network byte order (big-endian) and returns it as a byte array.
 /// This function mimics the behavior of the original C implementation's htonl() function.
 ///
@@ -76,15 +75,14 @@ pub struct Quote {
 /// Represents the header structure of a fortune cookie data file.
 /// This header contains metadata about the fortune cookie strings.
 pub struct CookieMetadata {
-    pub path: PathBuf,       // Path to the source file
-    pub platform: String, // Platform to use for serialization, one of: homebrew, linux, freebsd
-    pub version: u64,     // Data file format version
-    pub num_quotes: u64,  // Number of strings in file
-    pub max_length: u64,  // Length of longest string
-    pub min_length: u64,  // Length of shortest string
-    pub flags: u64,       // File flags (random, ordered, rotated)
-    pub delim: char,      // Delimiting character
-    pub file_size: u64,   // Total size of source file
+    pub path: PathBuf,      // Path to the source file
+    pub platform: String,   // Platform to use for serialization, one of: homebrew, linux, freebsd
+    pub version: u64,       // Data file format version
+    pub max_length: u64,    // Length of longest string
+    pub min_length: u64,    // Length of shortest string
+    pub flags: u64,         // File flags (random, ordered, rotated)
+    pub delim: char,        // Delimiting character
+    pub file_size: u64,     // Total size of source file
     pub quotes: Vec<Quote>, // Offsets of each string in the file
 }
 
@@ -96,7 +94,6 @@ impl Default for CookieMetadata {
             path: Path::new("").to_path_buf(),
             platform: "".to_string(),
             version: 0,
-            num_quotes: 0,
             max_length: 0,
             min_length: u64::MAX,
             flags: 0,
@@ -115,7 +112,7 @@ impl std::fmt::Display for CookieMetadata {
         write!(f, "  path: '{}'\n", self.path.display())?;
         write!(f, "  platform: '{}'\n", self.platform)?;
         write!(f, "  version: {}\n", self.version)?;
-        write!(f, "  num_quotes: {}\n", self.num_quotes)?;
+        write!(f, "  num_quotes: {}\n", self.quotes.len())?;
         write!(f, "  max_length: {}\n", self.max_length)?;
         write!(f, "  min_length: {}\n", self.min_length)?;
 
@@ -160,12 +157,13 @@ impl CookieMetadata {
             std::process::exit(1);
         });
         self.path = Path::new(filename).to_path_buf(); // use the filename without .dat extension
-        // Split content by delimiter pattern
+                                                       // Split content by delimiter pattern
         let splitter = format!("\n{}\n", self.delim);
         let parts: Vec<&str> = content.split(splitter.as_str()).collect();
         let mut offset = 0;
 
         // Process each quote, tracking offsets and updating metaself
+        let num_quotes = self.quotes.len();
         self.quotes.clear();
         for part in &parts {
             if part.trim().is_empty() {
@@ -177,13 +175,18 @@ impl CookieMetadata {
             });
             let len = part.len() as u64 + 1; // 1 = len('\n')
             offset += len + 2; // 2 = len('%\n')
-                            // Update max_length and min_length
+                               // Update max_length and min_length
             self.max_length = self.max_length.max(len);
             if len > 1 {
                 self.min_length = self.min_length.min(len);
             }
         }
-        self.num_quotes = self.quotes.len() as u64;
+        assert!(
+            num_quotes == 0 || num_quotes == self.quotes.len(),
+            "Error: Inconsistent number of quotes. Expected: {}, Found: {}",
+            num_quotes,
+            self.quotes.len()
+        );
         self.file_size = content.len() as u64;
     }
 
@@ -203,7 +206,6 @@ impl CookieMetadata {
         data
     }
 }
-
 
 /// Trait defining the interface for serializing and deserializing CookieMetadata
 /// for different platform formats (Homebrew, Linux, FreeBSD).
@@ -225,7 +227,7 @@ impl Serialize for SerializerHomebrew {
             VERSION_HOMEBREW
         };
         bytes.extend_from_slice(&u64_htonl_to_bytes(version));
-        bytes.extend_from_slice(&u64_htonl_to_bytes(data.num_quotes));
+        bytes.extend_from_slice(&u64_htonl_to_bytes(data.quotes.len() as u64));
         bytes.extend_from_slice(&u64_htonl_to_bytes(data.max_length));
         bytes.extend_from_slice(&u64_htonl_to_bytes(data.min_length));
         bytes.extend_from_slice(&u64_htonl_to_bytes(data.flags));
@@ -245,7 +247,7 @@ impl Serialize for SerializerHomebrew {
             path: Path::new("").to_path_buf(),
             platform: "homebrew".to_string(),
             version: u64_ntohl_from_bytes(bytes[0..8].try_into().unwrap()),
-            num_quotes: u64_ntohl_from_bytes(bytes[8..16].try_into().unwrap()),
+            // num_quotes: u64_ntohl_from_bytes(bytes[8..16].try_into().unwrap()),
             max_length: u64_ntohl_from_bytes(bytes[16..24].try_into().unwrap()),
             min_length: u64_ntohl_from_bytes(bytes[24..32].try_into().unwrap()),
             flags: u64_ntohl_from_bytes(bytes[32..40].try_into().unwrap()),
@@ -262,6 +264,13 @@ impl Serialize for SerializerHomebrew {
                 offset: u64_ntohl_from_bytes(bytes[i..i + 8].try_into().unwrap()),
             });
         }
+        let num_quotes = u64_ntohl_from_bytes(bytes[8..16].try_into().unwrap());
+        assert!(
+            num_quotes == data.quotes.len() as u64,
+            "Error: Inconsistent number of quotes. num_quotes: {}, quotes.len(): {}",
+            num_quotes,
+            data.quotes.len()
+        );
         data
     }
 }
@@ -279,7 +288,7 @@ impl Serialize for SerializerLinux {
             VERSION_LINUX
         };
         bytes.extend_from_slice(&(version as u32).to_be_bytes());
-        bytes.extend_from_slice(&(data.num_quotes as u32).to_be_bytes());
+        bytes.extend_from_slice(&(data.quotes.len() as u32).to_be_bytes());
         bytes.extend_from_slice(&(data.max_length as u32).to_be_bytes());
         bytes.extend_from_slice(&(data.min_length as u32).to_be_bytes());
         bytes.extend_from_slice(&(data.flags as u32).to_be_bytes());
@@ -299,7 +308,7 @@ impl Serialize for SerializerLinux {
             path: Path::new("").to_path_buf(),
             platform: "linux".to_string(),
             version: u32::from_be_bytes(bytes[0..4].try_into().unwrap()) as u64,
-            num_quotes: u32::from_be_bytes(bytes[4..8].try_into().unwrap()) as u64,
+            // num_quotes: u32::from_be_bytes(bytes[4..8].try_into().unwrap()) as u64,
             max_length: u32::from_be_bytes(bytes[8..12].try_into().unwrap()) as u64,
             min_length: u32::from_be_bytes(bytes[12..16].try_into().unwrap()) as u64,
             flags: u32::from_be_bytes(bytes[16..20].try_into().unwrap()) as u64,
@@ -315,12 +324,13 @@ impl Serialize for SerializerLinux {
                 offset: u32::from_be_bytes(bytes[i..i + 4].try_into().unwrap()) as u64,
             });
         }
-        println!(
-            "data.num_quotes = {}, data.quotes.len() = {}",
-            data.num_quotes,
+        let num_quotes = u32::from_be_bytes(bytes[4..8].try_into().unwrap()) as u64;
+        assert!(
+            num_quotes == data.quotes.len() as u64,
+            "Error: Inconsistent number of quotes. num_quotes: {}, quotes.len(): {}",
+            num_quotes,
             data.quotes.len()
         );
-        assert!(data.num_quotes == data.quotes.len() as u64);
         data
     }
 }
@@ -338,7 +348,7 @@ impl Serialize for SerializerFreeBSD {
             VERSION_FREEBSD
         };
         bytes.extend_from_slice(&(version as u32).to_be_bytes());
-        bytes.extend_from_slice(&(data.num_quotes as u32).to_be_bytes());
+        bytes.extend_from_slice(&(data.quotes.len() as u32).to_be_bytes());
         bytes.extend_from_slice(&(data.max_length as u32).to_be_bytes());
         bytes.extend_from_slice(&(data.min_length as u32).to_be_bytes());
         bytes.extend_from_slice(&(data.flags as u32).to_be_bytes());
@@ -358,7 +368,7 @@ impl Serialize for SerializerFreeBSD {
             path: Path::new("").to_path_buf(),
             platform: "freebsd".to_string(),
             version: u32::from_be_bytes(bytes[0..4].try_into().unwrap()) as u64,
-            num_quotes: u32::from_be_bytes(bytes[4..8].try_into().unwrap()) as u64,
+            // num_quotes: u32::from_be_bytes(bytes[4..8].try_into().unwrap()) as u64,
             max_length: u32::from_be_bytes(bytes[8..12].try_into().unwrap()) as u64,
             min_length: u32::from_be_bytes(bytes[12..16].try_into().unwrap()) as u64,
             flags: u32::from_be_bytes(bytes[16..20].try_into().unwrap()) as u64,
@@ -373,6 +383,13 @@ impl Serialize for SerializerFreeBSD {
                 offset: u64::from_be_bytes(bytes[i..i + 8].try_into().unwrap()),
             });
         }
+        let num_quotes = u32::from_be_bytes(bytes[4..8].try_into().unwrap()) as u64;
+        assert!(
+            num_quotes == data.quotes.len() as u64,
+            "Error: Inconsistent number of quotes. num_quotes: {}, quotes.len(): {}",
+            num_quotes,
+            data.quotes.len()
+        );
         data
     }
 }
@@ -432,7 +449,7 @@ impl Serializer {
             // Linux format has version 2, 32-bits header and 32-bits for offsets
             return SerializerType::Linux;
         } else {
-            return Serializer::get_type_by_current_platform();   // Default to current platform
+            return Serializer::get_type_by_current_platform(); // Default to current platform
         }
     }
 

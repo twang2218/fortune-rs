@@ -40,7 +40,7 @@ struct Args {
     show_file: bool,
 
     /// Enable additional debugging output
-    #[arg(short = 'D', default_value="false")]
+    #[arg(short = 'D', default_value = "false")]
     debug: bool,
 
     /// Consider all fortune files to be of equal size
@@ -164,7 +164,7 @@ fn find_cookies_with_text(path: &Path, args: &Args) -> Result<Vec<CookieMetadata
         let mut data = CookieMetadata::default();
         data.load_from_cookie_file(&file.to_string_lossy());
         // validate the data
-        if data.quotes.is_empty() || data.num_quotes < 2 {
+        if data.quotes.is_empty() || data.quotes.len() < 2 {
             continue;
         }
         cookies.push(data);
