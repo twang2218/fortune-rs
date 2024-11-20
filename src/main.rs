@@ -227,10 +227,25 @@ impl QuoteFilterManager {
     }
 }
 
-fn wait_for_quote(quote: &str, args: &Args) {
-    let wait_time = std::cmp::max((quote.len() as u64 + 1) / CHARS_PER_SEC, MIN_WAIT_TIME);
-    debug_println!(args, "Wait time: {}s", wait_time);
-    std::thread::sleep(std::time::Duration::from_secs(wait_time));
+fn get_rel_path(path: &Path, base: &Path) -> PathBuf {
+    path.strip_prefix(base)
+        .unwrap_or_else(|_| path)
+        .to_path_buf()
+}
+
+fn show_quote(path: &Path, quote: &Quote, show_file: bool, wait: bool) {
+    if show_file {
+        println!("({})\n%", path.to_string_lossy());
+    }
+    println!("{}", quote.content);
+    if wait {
+        let wait_time = std::cmp::max(
+            (quote.content.len() as u64 + 1) / CHARS_PER_SEC,
+            MIN_WAIT_TIME,
+        );
+        // debug_println!(args, "Wait time: {}s", wait_time);
+        std::thread::sleep(std::time::Duration::from_secs(wait_time));
+    }
 }
 
 fn main() -> Result<()> {
@@ -388,14 +403,8 @@ fn main() -> Result<()> {
             cookies_len
         );
         let (cookie, quote) = all_quotes.choose(&mut rand::thread_rng()).unwrap();
-        if args.show_file {
-            println!("({})\n", cookie.path.display());
-        }
-        // load cookie file content
-        println!("{}", quote.content);
-        if args.wait {
-            wait_for_quote(quote.content.as_str(), &args);
-        }
+        let path = get_rel_path(&cookie.path, args.path.as_ref());
+        show_quote(&path, quote, args.show_file, args.wait);
     } else {
         // -e: equal probability for each FILE
         // since equal size, choose a random cookie file first, then choose a random quote from the file
@@ -416,13 +425,8 @@ fn main() -> Result<()> {
             return Ok(());
         }
         let quote = cookie.quotes.choose(&mut rand::thread_rng()).unwrap();
-        if args.show_file {
-            println!("({})\n", cookie.path.display());
-        }
-        println!("{}", quote.content);
-        if args.wait {
-            wait_for_quote(quote.content.as_str(), &args);
-        }
+        let path = get_rel_path(&cookie.path, args.path.as_ref());
+        show_quote(&path, quote, args.show_file, args.wait);
     }
 
     Ok(())

@@ -1,4 +1,4 @@
-use assert_cmd::Command;
+use assert_cmd::{assert, Command};
 use std::process::Command as StdCommand;
 
 const TEST_DATA_PATH: &str = "tests/data";
@@ -159,8 +159,8 @@ fn test_fortune_flag_i_and_m() {
     // Compare the two outputs
     assert_eq!(
         my_stdout.matches("\n%").count(),
-        3,
-        "`fortune -i -m {} {}` - expected: 1 matched quote, got: {}",
+        4,
+        "`fortune -i -m {} {}` - expected: 3 matched quote, got: {}",
         pattern,
         TEST_DATA_PATH,
         my_stdout.split("\n%\n").count()
@@ -168,7 +168,7 @@ fn test_fortune_flag_i_and_m() {
     assert_eq!(
         my_stderr.matches("\n%").count(),
         2,
-        "`fortune -i -m {} {}` - expected: 1 matched file, got: {}",
+        "`fortune -i -m {} {}` - expected: 2 matched file, got: {}",
         pattern,
         TEST_DATA_PATH,
         my_stdout.split("\n%\n").count()
@@ -378,4 +378,43 @@ fn test_fortune_flag_f_and_e() {
             my_stderr
         );
     }
+}
+
+#[test]
+fn test_fortune_flag_c_and_o() {
+    let output = Command::cargo_bin("fortune")
+        .unwrap()
+        .arg("-c")
+        .arg("-o")
+        .arg(TEST_DATA_PATH)
+        .output()
+        .expect("msg: failed to execute our implementation");
+
+    let my_stdout = String::from_utf8(output.stdout).unwrap();
+    let my_stderr = String::from_utf8(output.stderr).unwrap();
+
+    let first_line = my_stdout.lines().next().unwrap();
+    let second_line = my_stdout.lines().nth(1).unwrap();
+    let third_line = my_stdout.lines().nth(2).unwrap();
+
+    assert_eq!(
+        first_line, "(off/offensive)",
+        "`fortune -c -o {}` - expected first_line: (off/offensive), got: {}",
+        TEST_DATA_PATH, first_line
+    );
+    assert_eq!(
+        second_line, "%",
+        "`fortune -c -o {}` - expected second_line: (on/offensive), got: {}",
+        TEST_DATA_PATH, second_line
+    );
+    assert_eq!(
+        third_line, "this is offensive quote.",
+        "`fortune -c -o {}` - expected third_line: (on/non-offensive), got: {}",
+        TEST_DATA_PATH, third_line
+    );
+    assert_eq!(
+        my_stderr, "",
+        "`fortune -c -o {}` - expected stderr: empty, got: {}",
+        TEST_DATA_PATH, my_stderr
+    );
 }
