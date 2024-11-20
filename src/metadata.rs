@@ -159,7 +159,10 @@ impl CookieMetadata {
         self.path = Path::new(filename).to_path_buf(); // use the filename without .dat extension
                                                        // Split content by delimiter pattern
         let splitter = format!("\n{}\n", self.delim);
-        let parts: Vec<&str> = content.split(splitter.as_str()).collect();
+        let parts: Vec<&str> = content
+            .split(splitter.as_str())
+            .map(|s| s.trim_end_matches("\n%")) // remove the '\n%' for the last quote
+            .collect();
         let mut offset = 0;
 
         // Process each quote, tracking offsets and updating metaself

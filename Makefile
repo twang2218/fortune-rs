@@ -6,6 +6,9 @@ build:
 	cargo build --release
 	cargo build
 
+test:
+	cargo test
+
 benchmark:
 	$(eval cookies := /opt/homebrew/Cellar/fortune/9708/share/games/fortunes)
 	cargo build --release --target-dir tmp
