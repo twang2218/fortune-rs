@@ -16,19 +16,19 @@ The `fortune` program is a simple program that displays a random message from a 
   - [x] Read the fortune the cookie file along with the `strfile` index file;
   - [x] Read the cookie files from a directory recursively;
 - [ ] Implement traditional fortune options;
-  - [ ] `-a` - Choose from all lists of maxims, both offensive and not.  (See the -o option for more information on offensive fortunes.)
-  - [ ] `-c` - Show the cookie file from which the fortune came.
-  - [ ] `-D` - Enable additional debugging output.  Specify this option multiple times for more verbose output.  Only available if compiled with `-DDEBUG`.
-  - [ ] `-e` - Consider all fortune files to be of equal size (see discussion below on multiple files).
-  - [ ] `-f` - Print out the list of files which would be searched, but don't print a fortune.
-  - [ ] `-i` - Ignore case for `-m` patterns.
-  - [ ] `-l` - Long dictums only.  See -n on how **long** is defined in this sense.
-  - [ ] `-m pattern` - Print out all fortunes which match the basic regular expression pattern.  The syntax of these expressions depends  on  how your system defines re_comp(3) or regcomp(3), but it should nevertheless be similar to the syntax used in grep(1).
-  - [ ] `-n length` - Set the longest fortune length (in characters) considered to be **short** (the default is 160).  All fortunes longer  than this  are  considered  **long**.  Be careful!  If you set the length too short and ask for short fortunes, or too long and ask for long ones, fortune goes into a never-ending thrash loop.
-  - [ ] `-s` - Short apothegms only.  See -n on which fortunes are considered **short**.
-  - [ ] `-o` - Choose only from potentially offensive aphorisms.  The -o option is ignored if a fortune directory is specified.
+  - [x] `-a` - Choose from all lists of maxims, both offensive and not.  (See the -o option for more information on offensive fortunes.)
+  - [x] `-c` - Show the cookie file from which the fortune came.
+  - [x] `-D` - Enable additional debugging output.  Specify this option multiple times for more verbose output.  Only available if compiled with `-DDEBUG`.
+  - [x] `-e` - Consider all fortune files to be of equal size (see discussion below on multiple files).
+  - [x] `-f` - Print out the list of files which would be searched, but don't print a fortune.
+  - [x] `-i` - Ignore case for `-m` patterns.
+  - [x] `-l` - Long dictums only.  See -n on how **long** is defined in this sense.
+  - [x] `-m pattern` - Print out all fortunes which match the basic regular expression pattern.  The syntax of these expressions depends  on  how your system defines re_comp(3) or regcomp(3), but it should nevertheless be similar to the syntax used in grep(1).
+  - [x] `-n length` - Set the longest fortune length (in characters) considered to be **short** (the default is 160).  All fortunes longer  than this  are  considered  **long**.  Be careful!  If you set the length too short and ask for short fortunes, or too long and ask for long ones, fortune goes into a never-ending thrash loop.
+  - [x] `-s` - Short apothegms only.  See -n on which fortunes are considered **short**.
+  - [x] `-o` - Choose only from potentially offensive aphorisms.  The -o option is ignored if a fortune directory is specified.
   - [ ] `-u` - Don't translate UTF-8 fortunes to the locale when searching or translating.
-  - [ ] `-w` - Wait  before termination for an amount of time calculated from the number of characters in the message.  This is useful if it is executed as part of the logout procedure to guarantee that the message can be read before the screen is cleared.
+  - [x] `-w` - Wait  before termination for an amount of time calculated from the number of characters in the message.  This is useful if it is executed as part of the logout procedure to guarantee that the message can be read before the screen is cleared.
   - [ ] `[[n%] file/directory/all]`
 - [ ] Implement modern enhancements;
   - [x] `-h` - Print a help message.
