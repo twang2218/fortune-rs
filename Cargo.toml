@@ -14,7 +14,7 @@ regex = "1.10"
 
 [[bin]]
 name = "fortune"
-path = "src/main.rs"
+path = "src/fortune.rs"
 
 [[bin]]
 name = "strfile"
