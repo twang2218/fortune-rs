@@ -1,3 +1,4 @@
+use anyhow::Result;
 use std::path::{Path, PathBuf};
 
 /// Converts a u64 value to network byte order (big-endian) and returns it as a byte array.
@@ -66,7 +67,7 @@ const HEADER_SIZE_LINUX: usize = 24;
 const HEADER_SIZE_FREEBSD: usize = 24;
 
 /// Represents a single fortune cookie quote with its text and position in file.
-#[derive(Default)]
+#[derive(Default, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Quote {
     pub content: String, // The actual quote text
     pub offset: u64,     // Byte offset of quote in the source file
@@ -74,6 +75,7 @@ pub struct Quote {
 
 /// Represents the header structure of a fortune cookie data file.
 /// This header contains metadata about the fortune cookie strings.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct CookieMetadata {
     pub path: PathBuf,      // Path to the source file
     pub platform: String,   // Platform to use for serialization, one of: homebrew, linux, freebsd
@@ -151,11 +153,9 @@ impl CookieMetadata {
     /// The delimiter character is set to '%' by default.
     /// # Arguments
     /// * `filename` - The path to the fortune cookie file
-    pub fn load_from_cookie_file(&mut self, filename: &str) {
-        let content = std::fs::read_to_string(filename).unwrap_or_else(|_| {
-            eprintln!("Error reading cookie file: {}", filename);
-            std::process::exit(1);
-        });
+    pub fn load_from_cookie_file(&mut self, filename: &str) -> Result<()> {
+        let content = std::fs::read_to_string(filename)?;
+        self.platform = Serializer::get_current_platform();
         self.path = Path::new(filename).to_path_buf(); // use the filename without .dat extension
                                                        // Split content by delimiter pattern
         let splitter = format!("\n{}\n", self.delim);
@@ -184,29 +184,28 @@ impl CookieMetadata {
                 self.min_length = self.min_length.min(len);
             }
         }
-        assert!(
-            num_quotes == 0 || num_quotes == self.quotes.len(),
-            "Error: Inconsistent number of quotes. Expected: {}, Found: {}",
-            num_quotes,
-            self.quotes.len()
-        );
+        if num_quotes != 0 && num_quotes != self.quotes.len() {
+            anyhow::bail!(
+                "Error: Inconsistent number of quotes. Expected: {}, Found: {}",
+                num_quotes,
+                self.quotes.len()
+            );
+        }
         self.file_size = content.len() as u64;
+        Ok(())
     }
 
-    pub fn from_dat(filename: &str) -> CookieMetadata {
+    pub fn from_dat(filename: &str) -> Result<CookieMetadata> {
         if !filename.ends_with(".dat") {
-            eprintln!("Error: Invalid data file: {}", filename);
-            std::process::exit(1);
+            anyhow::bail!("Error: Invalid data file: {}", filename);
         }
-        let bytes = std::fs::read(filename).unwrap_or_else(|_| {
-            eprintln!("Error reading cookie database: {}", filename);
-            std::process::exit(1);
-        });
+        let bytes = std::fs::read(filename)
+            .expect(format!("Error reading cookie database: {}", filename).as_str());
 
         let t = Serializer::get_type_by_bytes(&bytes);
         let mut data = Serializer::from_bytes(&bytes, t);
         data.path = Path::new(filename).with_extension("").to_path_buf(); // Remove .dat extension
-        data
+        Ok(data)
     }
 }
 
@@ -423,7 +422,7 @@ impl Serializer {
         }
     }
 
-    pub fn get_type_by_name(platform: &str) -> SerializerType {
+    pub fn get_type_by_platform(platform: &str) -> SerializerType {
         match platform {
             "homebrew" => SerializerType::Homebrew,
             "linux" => SerializerType::Linux,
@@ -463,6 +462,16 @@ impl Serializer {
             "linux" => SerializerType::Linux,
             "freebsd" => SerializerType::FreeBSD,
             _ => SerializerType::Linux, // Default to Linux format
+        }
+    }
+
+    pub fn get_current_platform() -> String {
+        let platform = std::env::consts::OS;
+        match platform {
+            "macos" => "homebrew".to_string(),
+            "linux" => "linux".to_string(),
+            "freebsd" => "freebsd".to_string(),
+            _ => "linux".to_string(), // Default to Linux format
         }
     }
 }

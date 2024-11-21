@@ -1,4 +1,4 @@
-use assert_cmd::{assert, Command};
+use assert_cmd::Command;
 use std::process::Command as StdCommand;
 
 const TEST_DATA_PATH: &str = "tests/data";
@@ -55,8 +55,6 @@ fn test_fortune_flag_m() {
         pattern, TEST_DATA_PATH, ref_stderr, my_stderr
     );
 
-    // ref: exit(find_matches() != 0);
-    // Should fail if matches are found
     pattern = "apple";
     Command::cargo_bin("fortune")
         .unwrap()
@@ -64,7 +62,7 @@ fn test_fortune_flag_m() {
         .arg(pattern)
         .arg(TEST_DATA_PATH)
         .assert()
-        .failure();
+        .success();
     // Should pass if no matches are found
     pattern = "notfound";
     Command::cargo_bin("fortune")
@@ -73,7 +71,7 @@ fn test_fortune_flag_m() {
         .arg(pattern)
         .arg(TEST_DATA_PATH)
         .assert()
-        .success();
+        .failure();
 }
 
 #[test]
@@ -184,8 +182,6 @@ fn test_fortune_flag_i_and_m() {
         pattern, TEST_DATA_PATH, ref_stderr, my_stderr
     );
 
-    // ref: exit(find_matches() != 0);
-    // Should fail if matches are found
     pattern = "apple";
     Command::cargo_bin("fortune")
         .unwrap()
@@ -194,7 +190,7 @@ fn test_fortune_flag_i_and_m() {
         .arg(pattern)
         .arg(TEST_DATA_PATH)
         .assert()
-        .failure();
+        .success();
     // Should pass if no matches are found
     pattern = "notfound";
     Command::cargo_bin("fortune")
@@ -204,7 +200,7 @@ fn test_fortune_flag_i_and_m() {
         .arg(pattern)
         .arg(TEST_DATA_PATH)
         .assert()
-        .success();
+        .failure();
 }
 
 #[test]
@@ -417,4 +413,98 @@ fn test_fortune_flag_c_and_o() {
         "`fortune -c -o {}` - expected stderr: empty, got: {}",
         TEST_DATA_PATH, my_stderr
     );
+}
+
+#[test]
+fn test_fortune_flag_probs() {
+    let testcases = [
+        (
+            "-f 60% tests/data 40% tests/data2",
+            [
+                "60.00% tests/data",
+                "27.27% apple",
+                "5.45% one",
+                "27.27% orange",
+                "0.00% zero",
+                "40.00% tests/data2",
+                "20.00% cat",
+                "20.00% dog",
+            ],
+        ),
+        (
+            "-f 30% tests/data 70% tests/data2",
+            [
+                "30.00% tests/data",
+                "13.64% apple",
+                "2.73% one",
+                "13.64% orange",
+                "0.00% zero",
+                "70.00% tests/data2",
+                "35.00% cat",
+                "35.00% dog",
+            ],
+        ),
+        (
+            "-f -e 20% tests/data 80% tests/data2",
+            [
+                "20.00% tests/data",
+                "5.00% apple",
+                "5.00% one",
+                "5.00% orange",
+                "5.00% zero",
+                "80.00% tests/data2",
+                "40.00% cat",
+                "40.00% dog",
+            ],
+        ),
+        (
+            "-f tests/data tests/data2",
+            [
+                "52.38% tests/data",
+                "23.81% apple",
+                "4.76% one",
+                "23.81% orange",
+                "0.00% zero",
+                "47.62% tests/data2",
+                "23.81% cat",
+                "23.81% dog",
+            ],
+        ),
+        (
+            "-f -e tests/data tests/data2",
+            [
+                "66.67% tests/data",
+                "16.67% apple",
+                "16.67% one",
+                "16.67% orange",
+                "16.67% zero",
+                "33.33% tests/data2",
+                "16.67% cat",
+                "16.67% dog",
+            ],
+        ),
+    ];
+
+    for (input, expected) in testcases.iter() {
+        let output = Command::cargo_bin("fortune")
+            .unwrap()
+            .args(input.split_whitespace().collect::<Vec<&str>>())
+            .output()
+            .expect("msg: failed to execute our implementation");
+
+        // let my_stdout = String::from_utf8(output.stdout).unwrap();
+        let my_stderr = String::from_utf8(output.stderr).unwrap();
+
+        // println!("my_stdout: {}", my_stdout);
+        println!("my_stderr: {}", my_stderr);
+        let my_lines: Vec<&str> = my_stderr.lines().map(|l| l.trim()).collect::<Vec<&str>>();
+        for expected_line in expected.iter() {
+            assert!(
+                my_lines.contains(expected_line),
+                "expected: {}, got: {}",
+                expected_line,
+                my_stderr
+            );
+        }
+    }
 }

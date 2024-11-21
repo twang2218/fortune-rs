@@ -4,7 +4,11 @@ use anyhow::{Ok, Result};
 use clap::Parser;
 use glob::glob;
 use metadata::{CookieMetadata, Quote};
-use rand::seq::SliceRandom;
+use rand::{
+    distributions::WeightedIndex,
+    prelude::Distribution,
+    seq::{IteratorRandom, SliceRandom},
+};
 use regex::Regex;
 use std::path::{Path, PathBuf};
 
@@ -26,10 +30,6 @@ macro_rules! debug_println {
     about = "A Rust implementation of the classic fortune program"
 )]
 struct Args {
-    /// Path to fortune file or directory
-    #[arg(default_value = "data")]
-    path: String,
-
     /// Choose from all lists of maxims, both offensive and not
     #[arg(short = 'a')]
     all: bool,
@@ -85,23 +85,9 @@ struct Args {
     /// Only load cookies without loading metadata
     #[arg(short = 't', long)]
     text: bool,
-}
 
-#[allow(dead_code)]
-fn find_cookies_with_metadata(path: &Path, args: &Args) -> Result<Vec<CookieMetadata>> {
-    let normal = args.all || !args.offensive;
-    let offensive = args.all || args.offensive;
-    let files = find_cookie_files(path, true, normal, offensive)?;
-    let mut cookies: Vec<CookieMetadata> = Vec::new();
-    for file in files {
-        let mut data = CookieMetadata::from_dat(&file.with_extension("dat").to_string_lossy());
-        if args.pattern.is_some() || args.short_only || args.long_only {
-            // load the quotes' content for pattern matching
-            data.load_from_cookie_file(&file.to_string_lossy());
-        }
-        cookies.push(data);
-    }
-    Ok(cookies)
+    /// [[n%] file/directory/all]
+    paths: Vec<String>,
 }
 
 fn find_cookie_files(
@@ -181,20 +167,24 @@ fn find_cookie_files(
     Ok(cookie_files)
 }
 
-fn find_cookies_with_text(path: &Path, args: &Args) -> Result<Vec<CookieMetadata>> {
-    let normal = args.all || !args.offensive;
-    let offensive = args.all || args.offensive;
-    let files = find_cookie_files(path, true, normal, offensive)?;
-    let mut cookies: Vec<CookieMetadata> = Vec::new();
-    for file in files {
-        let mut data = CookieMetadata::default();
-        data.load_from_cookie_file(&file.to_string_lossy());
-        // validate the data
-        // comment out this block because original fortune does not check if data.quotes.is_empty()
-        // if data.quotes.is_empty() {
-        //     continue;
-        // }
-        cookies.push(data);
+fn find_cookies(
+    paths: Vec<WeightedPath>,
+    normal: bool,
+    offensive: bool,
+    with_dat: bool,
+) -> Result<Vec<WeightedPath>> {
+    let mut cookies: Vec<WeightedPath> = Vec::new();
+    for path in paths {
+        let mut path = path.clone();
+        let files = find_cookie_files(&path.path, with_dat, normal, offensive)?;
+        for file in files {
+            let mut data = CookieMetadata::default();
+            // println!("Loading file: {}", file.display());
+            data.load_from_cookie_file(&file.to_string_lossy())?;
+            // println!("data: {:?}", data);
+            path.cookies.push(data);
+        }
+        cookies.push(path);
     }
     Ok(cookies)
 }
@@ -228,9 +218,17 @@ impl QuoteFilterManager {
 }
 
 fn get_rel_path(path: &Path, base: &Path) -> PathBuf {
-    path.strip_prefix(base)
+    let stripped = path
+        .strip_prefix(base)
         .unwrap_or_else(|_| path)
-        .to_path_buf()
+        .to_path_buf();
+    if stripped.file_name().is_none() {
+        // eprintln!("get_rel_path(path: {:?}, base: {:?}) -> {:?}", path, base, path);
+        path.to_path_buf()
+    } else {
+        // eprintln!("get_rel_path(path: {:?}, base: {:?}) -> {:?}", path, base, stripped);
+        stripped
+    }
 }
 
 fn show_quote(path: &Path, quote: &Quote, show_file: bool, wait: bool) {
@@ -248,18 +246,89 @@ fn show_quote(path: &Path, quote: &Quote, show_file: bool, wait: bool) {
     }
 }
 
+#[derive(Debug, Clone)]
+struct WeightedPath {
+    path: PathBuf,
+    weight: f64,
+    cookies: Vec<CookieMetadata>,
+}
+
+impl WeightedPath {
+    fn num_quotes(&self) -> usize {
+        self.cookies.iter().map(|c| c.quotes.len()).sum()
+    }
+}
+
+fn parse_weighted_paths(files: &Vec<String>) -> Result<Vec<WeightedPath>> {
+    let mut weighted_paths: Vec<WeightedPath> = Vec::new();
+    let mut prob: f64 = 0.0;
+    for item in files {
+        if item.ends_with("%") {
+            // this is the probability for the next file
+            prob = item.strip_suffix("%").unwrap().parse::<f64>()?;
+            // println!("item: {}, prob: {}", item, prob);
+        } else {
+            // check if an probability is given
+            if prob > 0.0 {
+                weighted_paths.push(WeightedPath {
+                    path: PathBuf::from(item.clone()),
+                    weight: prob,
+                    cookies: Vec::new(),
+                });
+                // println!("item: {}, prob: {}", item, prob);
+                prob = 0.0;
+            } else {
+                // no probability given, default to 0.0, which to be calculated later
+                weighted_paths.push(WeightedPath {
+                    path: PathBuf::from(item.clone()),
+                    weight: 0.0,
+                    cookies: Vec::new(),
+                });
+                // println!("item: {}, prob: {}", item, 0);
+            }
+        }
+    }
+    // validate the probability
+    let total_prob: f64 = weighted_paths.iter().map(|p| p.weight).sum();
+    if total_prob == 100.0 || total_prob == 0.0 {
+        // 100% or not given
+    } else {
+        // error should be raised
+        anyhow::bail!("Error: total probability is not 100%: {}%", total_prob);
+    }
+    // println!("Weighted paths: {:?}", weighted_paths);
+    Ok(weighted_paths)
+}
+
 fn main() -> Result<()> {
     let args = Args::parse();
-    let path = Path::new(&args.path);
 
-    if !path.exists() {
-        anyhow::bail!("{}: No such file or directory", path.display());
+    let normal = args.all || !args.offensive;
+    let offensive = args.all || args.offensive;
+    let with_dat = true;
+
+    // let path = Path::new(&args.path);
+    let weighted_paths = parse_weighted_paths(&args.paths)?;
+
+    let path_not_exists: Vec<PathBuf> = weighted_paths
+        .iter()
+        .map(|p| p.path.to_path_buf())
+        .filter(|p| !p.exists())
+        .collect();
+    if !path_not_exists.is_empty() {
+        anyhow::bail!("{:?} files not found.", path_not_exists);
     }
 
     // Debug output if requested
     if args.debug {
         println!("Arguments: {:?}", std::env::args().collect::<Vec<_>>());
-        println!("Path: {}", path.display());
+        println!(
+            "Paths: {:?}",
+            weighted_paths
+                .iter()
+                .map(|p| p.path.to_string_lossy().to_string())
+                .collect::<Vec<String>>()
+        );
     }
 
     // Create filters for quotes
@@ -296,34 +365,38 @@ fn main() -> Result<()> {
     }
 
     // Collect all fortune files
-    // let mut cookies = if args.text || !filters.is_empty() {
-    //     find_cookies_with_text(path, &args)?
-    // } else {
-    //     find_cookies_with_metadata(path, &args)?
-    // };
-    let mut cookies = find_cookies_with_text(path, &args)?;
+    let mut weighted_paths = find_cookies(weighted_paths, normal, offensive, with_dat)?;
 
     // Filter quotes based on given arguments (length, pattern, etc.)
-    let pre_cookies_len = cookies.len();
+    let pre_cookies_len: usize = weighted_paths
+        .iter()
+        .map(|p| p.cookies.len())
+        .sum::<usize>();
     if !filters.is_empty() {
-        for cookie in cookies.iter_mut() {
-            let pre_quotes_len = cookie.quotes.len();
-            cookie.quotes.retain(|q| filters.filter(&q.content));
-            debug_println!(
-                args,
-                "> Filtered quotes [{}]: {} -> {}",
-                cookie.path.to_string_lossy(),
-                pre_quotes_len,
-                cookie.quotes.len()
-            );
+        for p in weighted_paths.iter_mut() {
+            for cookie in p.cookies.iter_mut() {
+                let pre_quotes_len = cookie.quotes.len();
+                cookie.quotes.retain(|q| filters.filter(&q.content));
+                debug_println!(
+                    args,
+                    "> Filtered quotes [{}]: {} -> {}",
+                    cookie.path.to_string_lossy(),
+                    pre_quotes_len,
+                    cookie.quotes.len()
+                );
+            }
+            p.cookies.retain(|c| !c.quotes.is_empty());
         }
-        cookies.retain(|c| !c.quotes.is_empty());
     }
+    let post_cookies_len: usize = weighted_paths
+        .iter()
+        .map(|p| p.cookies.len())
+        .sum::<usize>();
     debug_println!(
         args,
         "Filtered cookies: {} -> {}",
         pre_cookies_len,
-        cookies.len()
+        post_cookies_len
     );
 
     // -m pattern matching
@@ -332,102 +405,239 @@ fn main() -> Result<()> {
     //  3. output the quote in '\n%\n' delimiter format to stdout
     if args.pattern.is_some() {
         let mut found = false;
-        for cookie in cookies.iter() {
-            let p = cookie.path.strip_prefix(&args.path).unwrap_or(&cookie.path);
-            eprintln!("({})\n%", p.display());
-            for quote in cookie.quotes.iter() {
-                if filters.filter(&quote.content) {
-                    println!("{}\n%", quote.content);
-                    found = true;
+        for p in weighted_paths.iter() {
+            for cookie in p.cookies.iter() {
+                let p = cookie.path.strip_prefix(&p.path).unwrap_or(&cookie.path);
+                eprintln!("({})\n%", p.display());
+                for quote in cookie.quotes.iter() {
+                    if filters.filter(&quote.content) {
+                        println!("{}\n%", quote.content);
+                        found = true;
+                    }
                 }
             }
         }
-        //  The original implementation is exit(find_matches() != 0);
-        //  So, if matches are found, exit with code 1
         if found {
-            std::process::exit(1); // exit code 1
+            return Ok(());
         } else {
-            std::process::exit(0); // exit code 0
+            anyhow::bail!("");
         }
     }
 
     // return exit code 1 if empty cookies
-    if cookies.is_empty() {
-        std::process::exit(1);
+    if weighted_paths.is_empty() {
+        anyhow::bail!("Not found any fortune cookies");
+    }
+
+    // fill missing weight
+    let total_weight: f64 = weighted_paths.iter().map(|p| p.weight).sum();
+    if total_weight == 0.0 {
+        // if all weights are 0, set equal weight according to the number of cookies or number of quotes depends on whether -e is given
+        let total_num_cookies: usize = weighted_paths.iter().map(|p| p.cookies.len()).sum();
+        let total_num_quotes: usize = weighted_paths.iter().map(|p| p.num_quotes()).sum();
+        for p in weighted_paths.iter_mut() {
+            if args.equal_size {
+                p.weight = p.cookies.len() as f64 / total_num_cookies as f64 * 100.0;
+            } else {
+                p.weight = p.num_quotes() as f64 / total_num_quotes as f64 * 100.0;
+            }
+        }
     }
 
     // -f: list files
     if args.list_files {
-        eprintln!("{:5.2}% {}", 100.0, args.path);
-        if !args.equal_size {
-            // 100.00% tests/data
-            //     45.45% apple
-            //      9.09% one
-            //     45.45% orange
-            //      0.00% zero
-            let total_quotes: usize = cookies.iter().map(|c| c.quotes.len()).sum();
-            for cookie in cookies.iter() {
-                let percentage = (cookie.quotes.len() as f64 / total_quotes as f64) * 100.0;
-                let p = cookie.path.strip_prefix(&args.path).unwrap_or(&cookie.path);
-                eprintln!("    {:5.2}% {}", percentage, p.display());
+        for path in weighted_paths.iter() {
+            let mut weight: f64 = path.weight as f64;
+            if weight == 0.0 {
+                weight = 100.0 / weighted_paths.len() as f64;
             }
-        } else {
-            // -e: equal size
-            // 100.00% tests/data
-            //     25.00% apple
-            //     25.00% one
-            //     25.00% orange
-            //     25.00% zero
-            let num_files = cookies.len();
-            for cookie in cookies.iter() {
-                let p = cookie.path.strip_prefix(&args.path).unwrap_or(&cookie.path);
-                eprintln!("    {:5.2}% {}", 100.0 / num_files as f64, p.display());
+            eprintln!("{:5.2}% {}", weight, path.path.display());
+
+            for cookie in path.cookies.iter() {
+                let p = cookie.path.strip_prefix(&path.path).unwrap_or(&cookie.path);
+                let prob = if args.equal_size {
+                    weight / path.cookies.len() as f64
+                } else {
+                    weight * cookie.quotes.len() as f64 / path.num_quotes() as f64
+                };
+                eprintln!("    {:5.2}% {}", prob, p.display());
             }
         }
+
         return Ok(());
     }
 
-    if !args.equal_size {
-        // normal: equal probability for each QUOTE.
-        // given all quotes are equal chance to be chosen, which means larger cookie file has more chance to be chosen
-        // so, aggregate all quotes and choose a random quote from the list
-        let all_quotes: Vec<(&CookieMetadata, &Quote)> = cookies
+    // for path in weighted_paths.iter() {
+    //     println!("> {:?}", path);
+    // }
+
+    let choosen_index = WeightedIndex::new(
+        weighted_paths
             .iter()
-            .flat_map(|c| c.quotes.iter().map(move |q| (c, q)))
-            .collect();
-        let cookies_len = cookies.len();
-        debug_println!(
-            args,
-            "Found {} quotes in {} files",
-            all_quotes.len(),
-            cookies_len
-        );
-        let (cookie, quote) = all_quotes.choose(&mut rand::thread_rng()).unwrap();
-        let path = get_rel_path(&cookie.path, args.path.as_ref());
-        show_quote(&path, quote, args.show_file, args.wait);
-    } else {
-        // -e: equal probability for each FILE
-        // since equal size, choose a random cookie file first, then choose a random quote from the file
-        // let mut non_empty_cookies: Vec<&mut CookieMetadata> = cookies.iter_mut().filter(|c| !c.quotes.is_empty()).collect();
-        // if non_empty_cookies.is_empty() {
-        //     anyhow::bail!("{}: No fortune cookies found in the directory", path.display());
-        // }
-        if cookies.is_empty() {
-            anyhow::bail!(
-                "{}: No fortune cookies found in the directory",
-                path.display()
-            );
-        }
-        let cookie = cookies.choose_mut(&mut rand::thread_rng()).unwrap();
-        debug_println!(args, "Chosen cookie: {}", cookie.path.display());
-        if cookie.quotes.is_empty() {
+            .map(|p| p.weight as f64)
+            .collect::<Vec<f64>>(),
+    )
+    .unwrap()
+    .sample(&mut rand::thread_rng());
+    let choosen_path = &weighted_paths[choosen_index];
+    // println!("choosen path: {:?}", choosen_path);
+    if args.equal_size {
+        let choosen_cookie = choosen_path
+            .cookies
+            .choose(&mut rand::thread_rng())
+            .unwrap();
+        if choosen_cookie.quotes.is_empty() {
             // original fortune just output nothing and exit
             return Ok(());
         }
-        let quote = cookie.quotes.choose(&mut rand::thread_rng()).unwrap();
-        let path = get_rel_path(&cookie.path, args.path.as_ref());
-        show_quote(&path, quote, args.show_file, args.wait);
+        // println!("choosen_cookie: {:?}", choosen_cookie);
+        let choosen_quote = choosen_cookie
+            .quotes
+            .choose(&mut rand::thread_rng())
+            .unwrap();
+        let path = get_rel_path(&choosen_cookie.path, &choosen_path.path);
+        show_quote(&path, choosen_quote, args.show_file, args.wait);
+    } else {
+        let (path, choosen_quote) = choosen_path
+            .cookies
+            .iter()
+            .flat_map(|c| c.quotes.iter().map(|q| (c.path.clone(), q)))
+            .choose(&mut rand::thread_rng())
+            .unwrap();
+        let path = get_rel_path(&path, &choosen_path.path);
+        show_quote(&path, choosen_quote, args.show_file, args.wait);
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+
+    #[test]
+    fn test_parse_weighted_paths() {
+        let testcases = [
+            (
+                "data1 data2 data3",
+                vec![("data1", 0.0), ("data2", 0.0), ("data3", 0.0)],
+                false,
+            ),
+            (
+                "50% data1 50% data2",
+                vec![("data1", 50.0), ("data2", 50.0)],
+                false,
+            ),
+            ("50% data1 50% data2 10% data3", vec![], true),
+        ];
+
+        for (line, expected, is_err) in testcases.iter() {
+            let files = line.split_whitespace().map(|s| s.to_string()).collect();
+            let weighted_paths = super::parse_weighted_paths(&files);
+            if *is_err {
+                assert!(weighted_paths.is_err());
+            } else {
+                let weighted_paths = weighted_paths.unwrap();
+                assert_eq!(weighted_paths.len(), expected.len());
+                for (i, (filename, weight)) in expected.iter().enumerate() {
+                    assert_eq!(weighted_paths[i].path.to_string_lossy(), *filename);
+                    assert_eq!(weighted_paths[i].weight, *weight);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_get_rel_path() {
+        let testcases = [
+            ("/a/b/c", "/a/b/c", "/a/b/c"),
+            ("/a/b/c", "/a/b", "c"),
+            ("/a/b/c", "/a", "b/c"),
+            ("/a/b/c", "/a/b/c/d", "/a/b/c"),
+            ("/a/b/c", "/a/b/c/d/e", "/a/b/c"),
+            ("aa/bb/cc", "aa/bb", "cc"),
+            ("aa/bb/cc", "aa", "bb/cc"),
+        ];
+
+        for (path, base, expected) in testcases.iter() {
+            let path = std::path::Path::new(path);
+            let base = std::path::Path::new(base);
+            let expected = std::path::Path::new(expected);
+            let rel_path = super::get_rel_path(path, base);
+            assert_eq!(
+                rel_path,
+                expected,
+                "path: {}, base: {} -> expected: {}, got: {}",
+                path.display(),
+                base.display(),
+                expected.display(),
+                rel_path.display()
+            );
+        }
+    }
+
+    #[test]
+    fn test_quote_filter_manager() {
+        let testcases = [
+            ("1234", false),
+            ("12345", false),
+            ("123456", true),
+            ("1234567", true),
+            ("12345678", true),
+            ("123456789", true),
+            ("1234567890", false),
+        ];
+
+        for (quote, expected) in testcases.iter() {
+            let mut filters = super::QuoteFilterManager::new();
+            assert_eq!(filters.is_empty(), true, "expected: empty, got: not empty");
+            filters.add_filter(|q| q.len() < 10);
+            assert_eq!(filters.is_empty(), false, "expected: not empty, got: empty");
+            filters.add_filter(|q| q.len() > 5);
+            let result = filters.filter(quote);
+            assert_eq!(
+                result, *expected,
+                "quote: {}, expected: {}, got: {}",
+                quote, expected, result
+            );
+        }
+    }
+
+    #[test]
+    fn test_find_cookie_files() {
+        let path = std::path::Path::new("tests/data");
+
+        let testcases = [
+            (path, true, true, false, 4),
+            (path, true, false, true, 1),
+            (path, true, true, true, 5),
+            (path, false, true, false, 4),
+            (path, false, false, true, 1),
+            (path, false, true, true, 5),
+        ];
+
+        for (path, with_dat, normal, offensive, expected) in testcases.iter() {
+            let files = super::find_cookie_files(path, *with_dat, *normal, *offensive);
+            assert!(
+                files.is_ok(),
+                "path: {} (with_dat: {}, normal: {}, offensive: {}) => got error: {:?}",
+                path.display(),
+                with_dat,
+                normal,
+                offensive,
+                files.err()
+            );
+            let files = files.unwrap();
+            assert_eq!(
+                files.len(),
+                *expected,
+                "path: {} (with_dat: {}, normal: {}, offensive: {}) => expected: {}, got: {}",
+                path.display(),
+                with_dat,
+                normal,
+                offensive,
+                expected,
+                files.len()
+            );
+        }
+    }
 }

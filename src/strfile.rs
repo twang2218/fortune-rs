@@ -1,12 +1,11 @@
 pub mod metadata;
 
+use anyhow::Result;
 use clap::{Arg, Command};
+use metadata::{CookieMetadata, Serializer};
 use rand::seq::SliceRandom;
 use rand::thread_rng;
-use std::io;
 use std::io::Write;
-use std::process;
-use metadata::{CookieMetadata, Serializer};
 
 /// Configuration options parsed from command line arguments.
 #[derive(Default)]
@@ -114,13 +113,13 @@ fn getargs() -> Args {
 
 /// Main function that processes fortune cookie files.
 /// Handles command line arguments and orchestrates the file processing.
-fn main() -> io::Result<()> {
+fn main() -> Result<()> {
     // Parse command-line arguments
     let cfg = getargs();
 
     // If -l flag is set, load and display data file
     if cfg.lflag {
-        let data = CookieMetadata::from_dat(&cfg.outfile);
+        let data = CookieMetadata::from_dat(&cfg.outfile)?;
         println!("File: {}", cfg.outfile);
         println!("{}", data);
         return Ok(());
@@ -129,7 +128,7 @@ fn main() -> io::Result<()> {
     // Parse input cookie file
     let mut data = CookieMetadata::default();
     data.delim = cfg.delimch;
-    data.load_from_cookie_file(&cfg.infile);
+    data.load_from_cookie_file(&cfg.infile)?;
 
     // Apply ordering if -o flag is set
     if cfg.oflag {
@@ -157,17 +156,14 @@ fn main() -> io::Result<()> {
     // Write output data file
     let bytes = Serializer::to_bytes(
         &data,
-        Serializer::get_type_by_name(&cfg.platform.as_str()),
+        Serializer::get_type_by_platform(&cfg.platform.as_str()),
     );
     let mut f = std::fs::OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
         .open(&cfg.outfile)
-        .unwrap_or_else(|_| {
-            eprintln!("Error opening output file: {}", cfg.outfile);
-            process::exit(1);
-        });
+        .expect(format!("Error opening output file: {}", cfg.outfile).as_str());
     f.write_all(&bytes).unwrap();
 
     // Display summary unless -s flag is set
