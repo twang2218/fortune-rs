@@ -2,7 +2,9 @@ pub mod metadata;
 
 use anyhow::{Ok, Result};
 use clap::Parser;
+use env_logger::Env;
 use glob::glob;
+use log::debug;
 use metadata::{CookieMetadata, Quote};
 use rand::{
     distributions::WeightedIndex,
@@ -14,15 +16,6 @@ use std::path::{Path, PathBuf};
 
 const MIN_WAIT_TIME: u64 = 6;
 const CHARS_PER_SEC: u64 = 20;
-
-// define a macro for replace println! with debug output if given args.debug is true
-macro_rules! debug_println {
-    ($args:expr, $($arg:tt)*) => {
-        if $args.debug {
-            println!($($arg)*);
-        }
-    };
-}
 
 #[derive(Parser)]
 #[command(
@@ -179,9 +172,7 @@ fn find_cookies(
         let files = find_cookie_files(&path.path, with_dat, normal, offensive)?;
         for file in files {
             let mut data = CookieMetadata::default();
-            // println!("Loading file: {}", file.display());
             data.load_from_cookie_file(&file.to_string_lossy())?;
-            // println!("data: {:?}", data);
             path.cookies.push(data);
         }
         cookies.push(path);
@@ -215,6 +206,10 @@ impl QuoteFilterManager {
     fn is_empty(&self) -> bool {
         self.filters.is_empty()
     }
+
+    fn len(&self) -> usize {
+        self.filters.len()
+    }
 }
 
 fn get_rel_path(path: &Path, base: &Path) -> PathBuf {
@@ -223,10 +218,16 @@ fn get_rel_path(path: &Path, base: &Path) -> PathBuf {
         .unwrap_or_else(|_| path)
         .to_path_buf();
     if stripped.file_name().is_none() {
-        // eprintln!("get_rel_path(path: {:?}, base: {:?}) -> {:?}", path, base, path);
+        debug!(
+            "get_rel_path(path: {:?}, base: {:?}) -> {:?}",
+            path, base, path
+        );
         path.to_path_buf()
     } else {
-        // eprintln!("get_rel_path(path: {:?}, base: {:?}) -> {:?}", path, base, stripped);
+        debug!(
+            "get_rel_path(path: {:?}, base: {:?}) -> {:?}",
+            path, base, stripped
+        );
         stripped
     }
 }
@@ -241,7 +242,7 @@ fn show_quote(path: &Path, quote: &Quote, show_file: bool, wait: bool) {
             (quote.content.len() as u64 + 1) / CHARS_PER_SEC,
             MIN_WAIT_TIME,
         );
-        // debug_println!(args, "Wait time: {}s", wait_time);
+        debug!("Wait time: {}s", wait_time);
         std::thread::sleep(std::time::Duration::from_secs(wait_time));
     }
 }
@@ -266,7 +267,7 @@ fn parse_weighted_paths(files: &Vec<String>) -> Result<Vec<WeightedPath>> {
         if item.ends_with("%") {
             // this is the probability for the next file
             prob = item.strip_suffix("%").unwrap().parse::<f64>()?;
-            // println!("item: {}, prob: {}", item, prob);
+            // debug!("parse_weighted_paths(): item: {} => prob: {}", item, prob);
         } else {
             // check if an probability is given
             if prob > 0.0 {
@@ -275,7 +276,7 @@ fn parse_weighted_paths(files: &Vec<String>) -> Result<Vec<WeightedPath>> {
                     weight: prob,
                     cookies: Vec::new(),
                 });
-                // println!("item: {}, prob: {}", item, prob);
+                debug!("parse_weighted_paths(): item: {} => prob: {}", item, prob);
                 prob = 0.0;
             } else {
                 // no probability given, default to 0.0, which to be calculated later
@@ -284,7 +285,7 @@ fn parse_weighted_paths(files: &Vec<String>) -> Result<Vec<WeightedPath>> {
                     weight: 0.0,
                     cookies: Vec::new(),
                 });
-                // println!("item: {}, prob: {}", item, 0);
+                debug!("parse_weighted_paths(): item: {} => prob: {}", item, 0);
             }
         }
     }
@@ -296,7 +297,7 @@ fn parse_weighted_paths(files: &Vec<String>) -> Result<Vec<WeightedPath>> {
         // error should be raised
         anyhow::bail!("Error: total probability is not 100%: {}%", total_prob);
     }
-    // println!("Weighted paths: {:?}", weighted_paths);
+    debug!("Weighted paths: {:?}", weighted_paths);
     Ok(weighted_paths)
 }
 
@@ -321,22 +322,16 @@ fn main() -> Result<()> {
 
     // Debug output if requested
     if args.debug {
-        println!("Arguments: {:?}", std::env::args().collect::<Vec<_>>());
-        println!(
-            "Paths: {:?}",
-            weighted_paths
-                .iter()
-                .map(|p| p.path.to_string_lossy().to_string())
-                .collect::<Vec<String>>()
-        );
+        env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
+        debug!("debug output enabled");
+        debug!("args: {:?}", std::env::args().collect::<Vec<_>>());
     }
 
     // Create filters for quotes
     let mut filters = QuoteFilterManager::new();
     if args.short_only {
         filters.add_filter(move |q| {
-            debug_println!(
-                args,
+            debug!(
                 "q.len() + 1: {}, args.length: {}: {}",
                 q.len() + 1,
                 args.length,
@@ -346,12 +341,7 @@ fn main() -> Result<()> {
         }); // +1 for '\n'
     } else if args.long_only {
         filters.add_filter(move |q| {
-            debug_println!(
-                args,
-                "q.len() + 1: {}, args.length: {}",
-                q.len() + 1,
-                args.length
-            );
+            debug!("q.len() + 1: {}, args.length: {}", q.len() + 1, args.length);
             q.len() + 1 > args.length
         }); // +1 for '\n'
     }
@@ -368,18 +358,18 @@ fn main() -> Result<()> {
     let mut weighted_paths = find_cookies(weighted_paths, normal, offensive, with_dat)?;
 
     // Filter quotes based on given arguments (length, pattern, etc.)
-    let pre_cookies_len: usize = weighted_paths
-        .iter()
-        .map(|p| p.cookies.len())
-        .sum::<usize>();
     if !filters.is_empty() {
+        let pre_cookies_len: usize = weighted_paths
+            .iter()
+            .map(|p| p.cookies.len())
+            .sum::<usize>();
+
         for p in weighted_paths.iter_mut() {
             for cookie in p.cookies.iter_mut() {
                 let pre_quotes_len = cookie.quotes.len();
                 cookie.quotes.retain(|q| filters.filter(&q.content));
-                debug_println!(
-                    args,
-                    "> Filtered quotes [{}]: {} -> {}",
+                debug!(
+                    "> filtered quotes [{}]: {} -> {}",
                     cookie.path.to_string_lossy(),
                     pre_quotes_len,
                     cookie.quotes.len()
@@ -387,17 +377,17 @@ fn main() -> Result<()> {
             }
             p.cookies.retain(|c| !c.quotes.is_empty());
         }
+        let post_cookies_len: usize = weighted_paths
+            .iter()
+            .map(|p| p.cookies.len())
+            .sum::<usize>();
+        debug!(
+            "Cookies: {} --filter[{}]--> {}",
+            pre_cookies_len,
+            filters.len(),
+            post_cookies_len
+        );
     }
-    let post_cookies_len: usize = weighted_paths
-        .iter()
-        .map(|p| p.cookies.len())
-        .sum::<usize>();
-    debug_println!(
-        args,
-        "Filtered cookies: {} -> {}",
-        pre_cookies_len,
-        post_cookies_len
-    );
 
     // -m pattern matching
     //  1. if -m is given, show all matching quotes
@@ -467,9 +457,19 @@ fn main() -> Result<()> {
         return Ok(());
     }
 
-    // for path in weighted_paths.iter() {
-    //     println!("> {:?}", path);
-    // }
+    debug!("weighted Path:");
+    for path in weighted_paths.iter() {
+        debug!(
+            "> (path: {:?}, weight: {:5.2}%, cookies: [{}])",
+            path.path,
+            path.weight,
+            path.cookies
+                .iter()
+                .map(|p| p.path.to_string_lossy())
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+    }
 
     let choosen_index = WeightedIndex::new(
         weighted_paths
@@ -480,7 +480,7 @@ fn main() -> Result<()> {
     .unwrap()
     .sample(&mut rand::thread_rng());
     let choosen_path = &weighted_paths[choosen_index];
-    // println!("choosen path: {:?}", choosen_path);
+    debug!("choosen path: {:?}", choosen_path.path);
     if args.equal_size {
         let choosen_cookie = choosen_path
             .cookies
@@ -490,7 +490,7 @@ fn main() -> Result<()> {
             // original fortune just output nothing and exit
             return Ok(());
         }
-        // println!("choosen_cookie: {:?}", choosen_cookie);
+        debug!("choosen_cookie: {:?}", choosen_cookie.path);
         let choosen_quote = choosen_cookie
             .quotes
             .choose(&mut rand::thread_rng())

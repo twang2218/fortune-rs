@@ -1,4 +1,5 @@
 use anyhow::Result;
+use log::debug;
 use std::path::{Path, PathBuf};
 
 /// Converts a u64 value to network byte order (big-endian) and returns it as a byte array.
@@ -184,6 +185,10 @@ impl CookieMetadata {
                 self.min_length = self.min_length.min(len);
             }
         }
+        // update min_length to 0 if no quotes
+        if self.quotes.is_empty() {
+            self.min_length = 0;
+        }
         if num_quotes != 0 && num_quotes != self.quotes.len() {
             anyhow::bail!(
                 "Error: Inconsistent number of quotes. Expected: {}, Found: {}",
@@ -192,6 +197,10 @@ impl CookieMetadata {
             );
         }
         self.file_size = content.len() as u64;
+
+        debug!("load_from_cookie_file(): -> (path: {:?}, platform: {:?}, max_length: {}, min_length: {}, num_quotes: {})",
+            self.path, self.platform, self.max_length, self.min_length, self.quotes.len());
+
         Ok(())
     }
 
