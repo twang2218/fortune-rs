@@ -29,11 +29,16 @@ The `fortune` program is a simple program that displays a random message from a 
   - [x] `-o` - Choose only from potentially offensive aphorisms.  The -o option is ignored if a fortune directory is specified.
   - [ ] `-u` - Don't translate UTF-8 fortunes to the locale when searching or translating.
   - [x] `-w` - Wait  before termination for an amount of time calculated from the number of characters in the message.  This is useful if it is executed as part of the logout procedure to guarantee that the message can be read before the screen is cleared.
-  - [ ] `[[n%] file/directory/all]`
-- [ ] Implement modern enhancements;
+  - [x] `[[n%] file/directory/all]`
   - [x] `-h` - Print a help message.
   - [x] `-v` - Print the version number.
+- [ ] Implement modern enhancements;
   - [ ] Support TOML configuration file;
+  - [ ] Embed the fortune database in the binary;
+- [ ] Project management
+  - [ ] Documentation;
+  - [x] Testing;
+  - [ ] CI/CD;
 
 ## References
 
