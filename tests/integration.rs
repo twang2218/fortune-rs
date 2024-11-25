@@ -1,216 +1,174 @@
 use assert_cmd::Command;
-use std::process::Command as StdCommand;
+use ctor::ctor;
+use std::{path::PathBuf, process::Command as StdCommand};
+use log::{info, debug};
+use env_logger::Env;
 
 const TEST_DATA_PATH: &str = "tests/data";
 
+#[ctor]
+fn setup() {
+    env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
+    // Add /usr/games to PATH, which is necessary for Ubuntu/Debian, *BSD systems;
+    let current_path = std::env::var("PATH").unwrap();
+    if !current_path.contains("/usr/games") {
+        let new_path = format!("{}:/usr/games", current_path);
+        std::env::set_var("PATH", new_path);
+    }
+    // info!("[current directory]: {:?}", std::env::current_dir().unwrap());
+}
+
 #[test]
 fn test_fortune_flag_m() {
-    // Get reference implementation output
-    let mut pattern = "apple";
-    let ref_output = StdCommand::new("fortune")
-        .arg("-m")
-        .arg(pattern)
-        .arg(TEST_DATA_PATH)
-        .output()
-        .expect("msg: failed to execute reference implementation");
-    let ref_stdout = String::from_utf8(ref_output.stdout).unwrap();
-    let ref_stderr = String::from_utf8(ref_output.stderr).unwrap();
+    info!("[current directory]: {:?}", std::env::current_dir().unwrap());
 
-    // Get our implementation output
-    let output = Command::cargo_bin("fortune")
-        .unwrap()
-        .arg("-m")
-        .arg(pattern)
-        .arg(TEST_DATA_PATH)
-        .output()
-        .expect("msg: failed to execute our implementation");
-    let my_stdout = String::from_utf8(output.stdout).unwrap();
-    let my_stderr = String::from_utf8(output.stderr).unwrap();
+    let testcases = [
+        ("apple", 1, 1),
+        ("the", 3, 1),
+    ];
 
-    // Compare the two outputs
-    assert_eq!(
-        my_stdout.matches("\n%").count(),
-        1,
-        "`fortune -m {} {}` - expected: 1 matched quote, got: {}",
-        pattern,
-        TEST_DATA_PATH,
-        my_stdout.split("\n%\n").count()
-    );
-    assert_eq!(
-        my_stderr.matches("\n%").count(),
-        1,
-        "`fortune -m {} {}` - expected: 1 matched file, got: {}",
-        pattern,
-        TEST_DATA_PATH,
-        my_stdout.split("\n%\n").count()
-    );
-    assert_eq!(
-        ref_stdout, my_stdout,
-        "`fortune -m {} {}` - [stdout], expected: {}, got: {}",
-        pattern, TEST_DATA_PATH, ref_stdout, my_stdout
-    );
-    assert_eq!(
-        ref_stderr, my_stderr,
-        "`fortune -m {} {}` - [stderr], expected: {}, got: {}",
-        pattern, TEST_DATA_PATH, ref_stderr, my_stderr
-    );
+    for (pattern, expected_num_quotes, expected_num_files) in testcases {
+        let args = format!("-m {} {}", pattern, TEST_DATA_PATH);
+        // Get reference implementation output
+        let ref_output = StdCommand::new("fortune")
+            .args(args.split_whitespace().collect::<Vec<&str>>())
+            .output()
+            .expect("msg: failed to execute reference implementation");
+        let ref_stdout = String::from_utf8(ref_output.stdout).unwrap();
+        let ref_stderr = String::from_utf8(ref_output.stderr).unwrap();
+    
+        // Get our implementation output
+        let output = Command::cargo_bin("fortune")
+            .unwrap()
+            .args(args.split_whitespace().collect::<Vec<&str>>())
+            .output()
+            .expect("msg: failed to execute our implementation");
+        let my_stdout = String::from_utf8(output.stdout).unwrap();
+        let my_stderr = String::from_utf8(output.stderr).unwrap();
 
-    pattern = "apple";
-    Command::cargo_bin("fortune")
-        .unwrap()
-        .arg("-m")
-        .arg(pattern)
-        .arg(TEST_DATA_PATH)
-        .assert()
-        .success();
-    // Should pass if no matches are found
-    pattern = "notfound";
-    Command::cargo_bin("fortune")
-        .unwrap()
-        .arg("-m")
-        .arg(pattern)
-        .arg(TEST_DATA_PATH)
-        .assert()
-        .failure();
+        // Compare the two outputs
+        let my_num_quotes = my_stdout.matches("\n%").count();
+        assert_eq!(
+            expected_num_quotes, my_num_quotes,
+            "`fortune {}` - expected: {} matched quotes, got: {}\n[ref_stdout]:\n{}\n[my_stdout]:\n{}",
+            args,
+            expected_num_quotes, my_num_quotes,
+            ref_stdout, my_stdout
+        );
+        let my_num_files = my_stderr.matches("\n%").count();
+        assert_eq!(
+            expected_num_files, my_num_files,
+            "`fortune {}` - expected: {} matched file, got: {}\n[ref_stderr]:\n{}\n[my_stderr]:\n{}",
+            args,
+            expected_num_files, my_num_files,
+            ref_stderr, my_stderr
+        );
+    
+        assert_eq!(ref_stdout, my_stdout,
+            "`fortune {}`\n[ref_stdout]:\n{}\n[my_stdout]:\n{}",
+            args, ref_stdout, my_stdout);
+        assert_eq!(ref_stderr, my_stderr,
+            "`fortune {}`\n[ref_stderr]:\n{}\n[my_stderr]:\n{}",
+            args, ref_stderr, my_stderr);    
+    }
+
+
+    let testcases = [
+        ("apple", true),
+        ("notfound", false),
+    ];
+
+    for (patter, result) in testcases {
+        let args = format!("-m {} {}", patter, TEST_DATA_PATH);
+        let assert_result = Command::cargo_bin("fortune")
+            .unwrap()
+            .args(args.split_whitespace().collect::<Vec<&str>>())
+            .assert();
+        if result {
+            assert_result.success();
+        } else {
+            assert_result.failure();
+        }
+    }
 }
 
 #[test]
 fn test_fortune_flag_i_and_m() {
-    let pwd = std::env::current_dir().unwrap();
-    println!("PWD: {:?}", pwd);
-    let mut pattern = "apple";
-    // Get reference implementation output
-    let ref_output = StdCommand::new("fortune")
-        .arg("-i")
-        .arg("-m")
-        .arg(pattern)
-        .arg(TEST_DATA_PATH)
-        .output()
-        .expect("msg: failed to execute reference implementation");
-    let ref_stdout = String::from_utf8(ref_output.stdout).unwrap();
-    let ref_stderr = String::from_utf8(ref_output.stderr).unwrap();
+    let testcases = [
+        ("apple", 5, 1),
+        ("the", 4, 2),
+    ];
 
-    // Get our implementation output
-    let output = Command::cargo_bin("fortune")
-        .unwrap()
-        .arg("-i")
-        .arg("-m")
-        .arg(pattern)
-        .arg(TEST_DATA_PATH)
-        .output()
-        .expect("msg: failed to execute our implementation");
-    let my_stdout = String::from_utf8(output.stdout).unwrap();
-    let my_stderr = String::from_utf8(output.stderr).unwrap();
+    for (pattern, expected_num_quotes, expected_num_files) in testcases {
+        let args = format!("-i -m {} {}", pattern, TEST_DATA_PATH);
+        // Get reference implementation output
+        let ref_output = StdCommand::new("fortune")
+            .args(args.split_whitespace().collect::<Vec<&str>>())
+            .output()
+            .expect("msg: failed to execute reference implementation");
+        let ref_stdout = String::from_utf8(ref_output.stdout).unwrap();
+        let ref_stderr = String::from_utf8(ref_output.stderr).unwrap();
+    
+        // Get our implementation output
+        let output = Command::cargo_bin("fortune")
+            .unwrap()
+            .args(args.split_whitespace().collect::<Vec<&str>>())
+            .output()
+            .expect("msg: failed to execute our implementation");
+        let my_stdout = String::from_utf8(output.stdout).unwrap();
+        let my_stderr = String::from_utf8(output.stderr).unwrap();
+    
+        // Compare the two outputs
+        let my_num_quotes = my_stdout.matches("\n%").count();
+        assert_eq!(
+            expected_num_quotes, my_num_quotes,
+            "`fortune {}` - expected: {} matched quotes, got: {}\n[ref_stdout]:\n{}\n[my_stdout]:\n{}",
+            args,
+            expected_num_quotes, my_num_quotes,
+            ref_stdout, my_stdout
+        );
+        let my_num_files = my_stderr.matches("\n%").count();
+        assert_eq!(
+            expected_num_files, my_num_files,
+            "`fortune {}` - expected: {} matched file, got: {}\n[ref_stderr]:\n{}\n[my_stderr]:\n{}",
+            args,
+            expected_num_files, my_num_files,
+            ref_stderr, my_stderr
+        );
+    
+        assert_eq!(ref_stdout, my_stdout,
+            "`fortune {}`\n[ref_stdout]:\n{}\n[my_stdout]:\n{}",
+            args, ref_stdout, my_stdout);
+        assert_eq!(ref_stderr, my_stderr,
+            "`fortune {}`\n[ref_stderr]:\n{}\n[my_stderr]:\n{}",
+            args, ref_stderr, my_stderr);    
+    }
 
-    // Compare the two outputs
-    assert_eq!(
-        my_stdout.matches("\n%").count(),
-        5,
-        "`fortune -i -m {} {}` - expected: 1 matched quote, got: {}",
-        pattern,
-        TEST_DATA_PATH,
-        my_stdout.split("\n%\n").count()
-    );
-    assert_eq!(
-        my_stderr.matches("\n%").count(),
-        1,
-        "`fortune -i -m {} {}` - expected: 1 matched file, got: {}",
-        pattern,
-        TEST_DATA_PATH,
-        my_stdout.split("\n%\n").count()
-    );
-    assert_eq!(
-        ref_stdout, my_stdout,
-        "`fortune -i -m {} {}` - [stdout], expected: {}, got: {}",
-        pattern, TEST_DATA_PATH, ref_stdout, my_stdout
-    );
-    assert_eq!(
-        ref_stderr, my_stderr,
-        "`fortune -i -m {} {}` - [stderr], expected: {}, got: {}",
-        pattern, TEST_DATA_PATH, ref_stderr, my_stderr
-    );
+    let testcases = [
+        ("apple", true),
+        ("notfound", false),
+    ];
 
-    pattern = "the";
-    // Get reference implementation output
-    let ref_output = StdCommand::new("fortune")
-        .arg("-i")
-        .arg("-m")
-        .arg(pattern)
-        .arg(TEST_DATA_PATH)
-        .output()
-        .expect("msg: failed to execute reference implementation");
-    let ref_stdout = String::from_utf8(ref_output.stdout).unwrap();
-    let ref_stderr = String::from_utf8(ref_output.stderr).unwrap();
-
-    // Get our implementation output
-    let output = Command::cargo_bin("fortune")
-        .unwrap()
-        .arg("-i")
-        .arg("-m")
-        .arg(pattern)
-        .arg(TEST_DATA_PATH)
-        .output()
-        .expect("msg: failed to execute our implementation");
-    let my_stdout = String::from_utf8(output.stdout).unwrap();
-    let my_stderr = String::from_utf8(output.stderr).unwrap();
-
-    // Compare the two outputs
-    assert_eq!(
-        my_stdout.matches("\n%").count(),
-        4,
-        "`fortune -i -m {} {}` - expected: 3 matched quote, got: {}",
-        pattern,
-        TEST_DATA_PATH,
-        my_stdout.split("\n%\n").count()
-    );
-    assert_eq!(
-        my_stderr.matches("\n%").count(),
-        2,
-        "`fortune -i -m {} {}` - expected: 2 matched file, got: {}",
-        pattern,
-        TEST_DATA_PATH,
-        my_stdout.split("\n%\n").count()
-    );
-    assert_eq!(
-        ref_stdout, my_stdout,
-        "`fortune -i -m {} {}` - [stdout], expected: {}, got: {}",
-        pattern, TEST_DATA_PATH, ref_stdout, my_stdout
-    );
-    assert_eq!(
-        ref_stderr, my_stderr,
-        "`fortune -i -m {} {}` - [stderr], expected: {}, got: {}",
-        pattern, TEST_DATA_PATH, ref_stderr, my_stderr
-    );
-
-    pattern = "apple";
-    Command::cargo_bin("fortune")
-        .unwrap()
-        .arg("-i")
-        .arg("-m")
-        .arg(pattern)
-        .arg(TEST_DATA_PATH)
-        .assert()
-        .success();
-    // Should pass if no matches are found
-    pattern = "notfound";
-    Command::cargo_bin("fortune")
-        .unwrap()
-        .arg("-i")
-        .arg("-m")
-        .arg(pattern)
-        .arg(TEST_DATA_PATH)
-        .assert()
-        .failure();
+    for (patter, result) in testcases {
+        let args = format!("-i -m {} {}", patter, TEST_DATA_PATH);
+        let assert_result = Command::cargo_bin("fortune")
+            .unwrap()
+            .args(args.split_whitespace().collect::<Vec<&str>>())
+            .assert();
+        if result {
+            assert_result.success();
+        } else {
+            assert_result.failure();
+        }
+    }
 }
 
 #[test]
 fn test_fortune_flag_l_and_n() {
     let length = 70;
+    let args = format!("-l -n {} {}", length, TEST_DATA_PATH);
     let ref_output = StdCommand::new("fortune")
-        .arg("-l")
-        .arg("-n")
-        .arg(length.to_string())
-        .arg(TEST_DATA_PATH)
+        .args(args.split_whitespace().collect::<Vec<&str>>())
         .output()
         .expect("msg: failed to execute reference implementation");
 
@@ -219,36 +177,27 @@ fn test_fortune_flag_l_and_n() {
 
     let output = Command::cargo_bin("fortune")
         .unwrap()
-        .arg("-l")
-        .arg("-n")
-        .arg(length.to_string())
-        .arg(TEST_DATA_PATH)
+        .args(args.split_whitespace().collect::<Vec<&str>>())
         .output()
         .expect("msg: failed to execute our implementation");
 
     let my_stdout = String::from_utf8(output.stdout).unwrap();
     let my_stderr = String::from_utf8(output.stderr).unwrap();
 
-    assert_eq!(
-        ref_stdout, my_stdout,
-        "`fortune -l -n {} {}` - [stdout], expected: {}, got: {}",
-        length, TEST_DATA_PATH, ref_stdout, my_stdout
-    );
-    assert_eq!(
-        ref_stderr, my_stderr,
-        "`fortune -l -n {} {}` - [stderr], expected: {}, got: {}",
-        length, TEST_DATA_PATH, ref_stderr, my_stderr
-    );
+    assert_eq!(ref_stdout, my_stdout,
+        "`fortune {}`\n[ref_stdout]:\n{}\n[my_stdout]:\n{}",
+        args, ref_stdout, my_stdout);
+    assert_eq!(ref_stderr, my_stderr,
+        "`fortune {}`\n[ref_stderr]:\n{}\n[my_stderr]:\n{}",
+        args, ref_stderr, my_stderr);
 }
 
 #[test]
 fn test_fortune_flag_s_and_n() {
     let length = 19;
+    let args = format!("-s -n {} {}", length, TEST_DATA_PATH);
     let ref_output = StdCommand::new("fortune")
-        .arg("-s")
-        .arg("-n")
-        .arg(length.to_string())
-        .arg(TEST_DATA_PATH)
+        .args(args.split_whitespace().collect::<Vec<&str>>())
         .output()
         .expect("msg: failed to execute reference implementation");
 
@@ -257,33 +206,26 @@ fn test_fortune_flag_s_and_n() {
 
     let output = Command::cargo_bin("fortune")
         .unwrap()
-        .arg("-s")
-        .arg("-n")
-        .arg(length.to_string())
-        .arg(TEST_DATA_PATH)
+        .args(args.split_whitespace().collect::<Vec<&str>>())
         .output()
         .expect("msg: failed to execute our implementation");
 
     let my_stdout = String::from_utf8(output.stdout).unwrap();
     let my_stderr = String::from_utf8(output.stderr).unwrap();
 
-    assert_eq!(
-        ref_stdout, my_stdout,
-        "`fortune -s -n {} {}` - [stdout], expected: {}, got: {}",
-        length, TEST_DATA_PATH, ref_stdout, my_stdout
-    );
-    assert_eq!(
-        ref_stderr, my_stderr,
-        "`fortune -s -n {} {}` - [stderr], expected: {}, got: {}",
-        length, TEST_DATA_PATH, ref_stderr, my_stderr
-    );
+    assert_eq!(ref_stdout, my_stdout,
+        "`fortune {}`\n[ref_stdout]:\n{}\n[my_stdout]:\n{}",
+        args, ref_stdout, my_stdout);
+    assert_eq!(ref_stderr, my_stderr,
+        "`fortune {}`\n[ref_stderr]:\n{}\n[my_stderr]:\n{}",
+        args, ref_stderr, my_stderr);
 }
 
 #[test]
 fn test_fortune_flag_f() {
+    let args = format!("-f {}", TEST_DATA_PATH);
     let ref_output = StdCommand::new("fortune")
-        .arg("-f")
-        .arg(TEST_DATA_PATH)
+        .args(args.split_whitespace().collect::<Vec<&str>>())
         .output()
         .expect("msg: failed to execute reference implementation");
 
@@ -292,19 +234,19 @@ fn test_fortune_flag_f() {
 
     let output = Command::cargo_bin("fortune")
         .unwrap()
-        .arg("-f")
-        .arg(TEST_DATA_PATH)
+        .args(args.split_whitespace().collect::<Vec<&str>>())
         .output()
         .expect("msg: failed to execute our implementation");
 
     let my_stdout = String::from_utf8(output.stdout).unwrap();
     let my_stderr = String::from_utf8(output.stderr).unwrap();
 
-    assert_eq!(
-        ref_stdout, my_stdout,
-        "`fortune -f {}` - [stdout], expected: {}, got: {}",
-        TEST_DATA_PATH, ref_stdout, my_stdout
-    );
+    assert_eq!(ref_stdout, my_stdout,
+        "`fortune {}`\n[ref_stdout]:\n{}\n[my_stdout]:\n{}",
+        args, ref_stdout, my_stdout);
+    debug!("`fortune {}`\n[ref_stderr]:\n{}\n[my_stderr]:\n{}",
+        args, ref_stderr, my_stderr);
+
     //  entry may in any order
     // parse the probability list: probability, path
     // eg.
@@ -316,10 +258,27 @@ fn test_fortune_flag_f() {
     //     0.00% zero
     //
     let ref_lines: Vec<&str> = ref_stderr.lines().collect::<Vec<&str>>();
+    let my_lines: Vec<&str> = my_stderr.lines().collect::<Vec<&str>>();
     for ref_line in ref_lines {
+        // some system may use absolute path, so we remove the path prefix if exists
+        let ref_parts = ref_line.split(" ").collect::<Vec<&str>>();
+        let ref_percentage = ref_parts[0];
+        let ref_path = ref_parts[1];
+
+        let mut found = false;
+        for my_line in my_lines.iter() {
+            let my_parts = my_line.split(" ").collect::<Vec<&str>>();
+            let my_percentage = my_parts[0];
+            let my_path = my_parts[1];
+            if my_percentage == ref_percentage && ref_path.contains(my_path) {
+                found = true;
+                break;
+            }
+        }
         assert!(
-            my_stderr.contains(ref_line),
-            "expected: {}, got: {}",
+            found,
+            "fortune -f {} - cannot find '{}' in '{}'",
+            TEST_DATA_PATH,
             ref_line,
             my_stdout
         );
@@ -328,10 +287,9 @@ fn test_fortune_flag_f() {
 
 #[test]
 fn test_fortune_flag_f_and_e() {
+    let args = format!("-f -e {}", TEST_DATA_PATH);
     let ref_output = StdCommand::new("fortune")
-        .arg("-f")
-        .arg("-e")
-        .arg(TEST_DATA_PATH)
+        .args(args.split_whitespace().collect::<Vec<&str>>())
         .output()
         .expect("msg: failed to execute reference implementation");
 
@@ -340,14 +298,18 @@ fn test_fortune_flag_f_and_e() {
 
     let output = Command::cargo_bin("fortune")
         .unwrap()
-        .arg("-f")
-        .arg("-e")
-        .arg(TEST_DATA_PATH)
+        .args(args.split_whitespace().collect::<Vec<&str>>())
         .output()
         .expect("msg: failed to execute our implementation");
 
     let my_stdout = String::from_utf8(output.stdout).unwrap();
     let my_stderr = String::from_utf8(output.stderr).unwrap();
+
+    assert_eq!(ref_stdout, my_stdout,
+        "`fortune {}`\n[ref_stdout]:\n{}\n[my_stdout]:\n{}",
+        args, ref_stdout, my_stdout);
+    debug!("`fortune {}`\n[ref_stderr]:\n{}\n[my_stderr]:\n{}",
+        args, ref_stderr, my_stderr);
 
     assert_eq!(
         ref_stdout, my_stdout,
@@ -365,38 +327,58 @@ fn test_fortune_flag_f_and_e() {
     //     0.00% zero
     //
     let ref_lines: Vec<&str> = ref_stderr.lines().collect::<Vec<&str>>();
+    let my_lines: Vec<&str> = my_stderr.lines().collect::<Vec<&str>>();
     for ref_line in ref_lines {
+        // some system may use absolute path, so we remove the path prefix if exists
+        let ref_parts = ref_line.split(" ").collect::<Vec<&str>>();
+        let ref_percentage = ref_parts[0];
+        let ref_path = ref_parts[1];
+
+        let mut found = false;
+        for my_line in my_lines.iter() {
+            let my_parts = my_line.split(" ").collect::<Vec<&str>>();
+            let my_percentage = my_parts[0];
+            let my_path = my_parts[1];
+            if my_percentage == ref_percentage && ref_path.contains(my_path) {
+                found = true;
+                break;
+            }
+        }
         assert!(
-            my_stderr.contains(ref_line),
-            "fortune -f -e {} - expected: {}, got: {}",
-            TEST_DATA_PATH,
+            found,
+            "`fortune {}` - cannot find '{}' in '{}'",
+            args,
             ref_line,
-            my_stderr
+            my_stdout
         );
     }
 }
 
 #[test]
 fn test_fortune_flag_c_and_o() {
+    let args = format!("-c -o {}", TEST_DATA_PATH);
     let output = Command::cargo_bin("fortune")
         .unwrap()
-        .arg("-c")
-        .arg("-o")
-        .arg(TEST_DATA_PATH)
+        .args(args.split_whitespace().collect::<Vec<&str>>())
         .output()
         .expect("msg: failed to execute our implementation");
 
     let my_stdout = String::from_utf8(output.stdout).unwrap();
     let my_stderr = String::from_utf8(output.stderr).unwrap();
 
+    debug!("`fortune {}`\n[my_stdout]:\n{}\n[my_stderr]:\n{}",
+        args, my_stdout, my_stderr);
+
     let first_line = my_stdout.lines().next().unwrap();
     let second_line = my_stdout.lines().nth(1).unwrap();
     let third_line = my_stdout.lines().nth(2).unwrap();
 
+    let path: PathBuf = ["off", "offensive"].iter().collect();
+    let expected_first_line = format!("({})", path.display());
     assert_eq!(
-        first_line, "(off/offensive)",
-        "`fortune -c -o {}` - expected first_line: (off/offensive), got: {}",
-        TEST_DATA_PATH, first_line
+        first_line, expected_first_line,
+        "`fortune -c -o {}` - expected first_line: {}, got: {}",
+        TEST_DATA_PATH, expected_first_line, first_line
     );
     assert_eq!(
         second_line, "%",
@@ -485,25 +467,25 @@ fn test_fortune_flag_probs() {
         ),
     ];
 
-    for (input, expected) in testcases.iter() {
+    for (args, expected) in testcases.iter() {
         let output = Command::cargo_bin("fortune")
             .unwrap()
-            .args(input.split_whitespace().collect::<Vec<&str>>())
+            .args(args.split_whitespace().collect::<Vec<&str>>())
             .output()
             .expect("msg: failed to execute our implementation");
 
-        // let my_stdout = String::from_utf8(output.stdout).unwrap();
+        let my_stdout = String::from_utf8(output.stdout).unwrap();
         let my_stderr = String::from_utf8(output.stderr).unwrap();
 
-        // println!("my_stdout: {}", my_stdout);
-        println!("my_stderr: {}", my_stderr);
+        debug!("`fortune {}`\n[my_stdout]:\n{}\n[my_stderr]:\n{}",
+            args, my_stdout, my_stderr);
+    
         let my_lines: Vec<&str> = my_stderr.lines().map(|l| l.trim()).collect::<Vec<&str>>();
         for expected_line in expected.iter() {
-            assert!(
-                my_lines.contains(expected_line),
-                "expected: {}, got: {}",
-                expected_line,
-                my_stderr
+            assert!(my_lines.contains(expected_line),
+                "`fortune {}`\n[expected_stdout]:\n{}\n[my_stderr]:\n{}",
+                args,
+                expected.join("\n"), my_stderr
             );
         }
     }

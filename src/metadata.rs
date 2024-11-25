@@ -156,6 +156,9 @@ impl CookieMetadata {
     /// * `filename` - The path to the fortune cookie file
     pub fn load_from_cookie_file(&mut self, filename: &str) -> Result<()> {
         let content = std::fs::read_to_string(filename)?;
+        debug!("load_from_cookie_file(): content: '{:?}'", content);
+        // normalize newline characters
+        let content = content.replace("\r\n", "\n").replace("\r", "\n");
         self.platform = Serializer::get_current_platform();
         self.path = Path::new(filename).to_path_buf(); // use the filename without .dat extension
                                                        // Split content by delimiter pattern
