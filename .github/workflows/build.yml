@@ -1,0 +1,163 @@
+name: build
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: ${{ matrix.job.target }} (${{ matrix.job.os }})
+    runs-on: ${{ matrix.job.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        job:
+          - { target: aarch64-unknown-linux-musl  , os: ubuntu-22.04, dpkg_arch: arm64,            use-cross: true }
+          - { target: aarch64-unknown-linux-gnu   , os: ubuntu-22.04, dpkg_arch: arm64,            use-cross: true }
+          - { target: arm-unknown-linux-gnueabihf , os: ubuntu-22.04, dpkg_arch: armhf,            use-cross: true }
+          - { target: arm-unknown-linux-musleabihf, os: ubuntu-22.04, dpkg_arch: musl-linux-armhf, use-cross: true }
+          - { target: i686-unknown-linux-gnu      , os: ubuntu-22.04, dpkg_arch: i686,             use-cross: true }
+          - { target: i686-unknown-linux-musl     , os: ubuntu-22.04, dpkg_arch: musl-linux-i686,  use-cross: true }
+          - { target: x86_64-unknown-linux-gnu    , os: ubuntu-22.04, dpkg_arch: amd64,            use-cross: true }
+          - { target: x86_64-unknown-linux-musl   , os: ubuntu-22.04, dpkg_arch: musl-linux-amd64, use-cross: true }
+          - { target: x86_64-apple-darwin         , os: macos-14,                                                  }
+          - { target: aarch64-apple-darwin        , os: macos-14,                                                  }
+          - { target: x86_64-pc-windows-gnu       , os: windows-2022,                                              }
+          - { target: x86_64-pc-windows-msvc      , os: windows-2022,                                              }
+          - { target: i686-pc-windows-msvc        , os: windows-2022,                                              }
+    env:
+      BUILD_CMD: cargo
+      BIN_NAME: fortune
+    steps:
+    - name: Checkout source code
+      uses: actions/checkout@v4
+
+    - name: Install prerequisites
+      shell: bash
+      run: |
+        case ${{ matrix.job.target }} in
+          arm-unknown-linux-*)
+            sudo apt-get -y update ;
+            sudo apt-get -y install gcc-arm-linux-gnueabihf ;;
+          aarch64-unknown-linux-gnu)
+            sudo apt-get -y update ;
+            sudo apt-get -y install gcc-aarch64-linux-gnu ;;
+        esac
+
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.job.target }}
+
+    - name: Install cross
+      if: matrix.job.use-cross
+      uses: taiki-e/install-action@v2
+      with:
+        tool: cross
+
+    - name: Overwrite build command env variable
+      if: matrix.job.use-cross
+      shell: bash
+      run: echo "BUILD_CMD=cross" | tee -a $GITHUB_ENV
+
+    - name: Show version information (Rust, cargo, GCC)
+      shell: bash
+      run: |
+        gcc --version || true
+        rustup -V
+        rustup toolchain list
+        rustup default
+        cargo -V
+        rustc -V
+      
+    - name: metadata
+      id: metadata
+      shell: bash
+      run: |
+        package_name=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].name')
+        version=$(cargo metadata --no-deps --format-version 1 | jq -r '.packages[0].version')
+        echo "package_name=${package_name}" | tee -a $GITHUB_OUTPUT
+        echo "version=${version}" | tee -a $GITHUB_OUTPUT
+        echo "staging=${package_name}-v${version}-${{ matrix.job.target }}" | tee -a $GITHUB_OUTPUT
+
+    - name: Build
+      id: build
+      shell: bash
+      run: |
+        bins=("fortune" "strfile")
+        mkdir -p ${{ steps.metadata.outputs.staging }}/bin
+        for bin in "${bins[@]}"; do
+          $BUILD_CMD build --locked --release --target=${{ matrix.job.target }} --verbose --bin $bin
+          if [ "${{ matrix.job.os }}" = "windows-latest" ]; then
+            BIN_PATH=target/${{ matrix.job.target }}/release/${bin}.exe
+          else
+            BIN_PATH=target/${{ matrix.job.target }}/release/${bin}
+          fi
+          cp $BIN_PATH ${{ steps.metadata.outputs.staging }}/bin/
+        done
+        $BUILD_CMD run --bin fortune -- --help
+
+    - name: Prepare for tests
+      shell: bash
+      run: |
+        if [[ "${{ matrix.job.os }}" == ubuntu-* ]]; then
+          sudo apt-get -y update
+          sudo apt-get -y install fortune
+          export PATH=$PATH:/usr/games
+          echo "PATH=$PATH" | tee -a $GITHUB_ENV
+        elif [[ "${{ matrix.job.os }}" == macos-* ]]; then
+          brew install fortune
+        elif [[ "${{ matrix.job.os }}" == windows-* ]]; then
+          # choco install fortune
+          pip install pnu-fortune
+        fi
+        ls -al
+        echo "Update tests/data .dat files to local system"
+        find tests/data -type f ! -name "*.dat" -exec strfile {} \;
+
+    - name: Test
+      shell: bash
+      run: |
+        export RUST_BACKTRACE=all
+        if [[ ${{ matrix.job.os }} == windows-* ]]
+        then
+          fortune --version
+          powershell.exe -command "$BUILD_CMD test --locked --target=${{ matrix.job.target }} --verbose --all"
+        else
+          fortune -v
+          $BUILD_CMD test --locked --target=${{ matrix.job.target }} --verbose --all
+        fi
+
+    - name: Package
+      id: package
+      shell: bash
+      run: |
+        staging="${{ steps.metadata.outputs.staging }}"
+        mkdir -p ${staging}/bin
+        if [[ "${{ matrix.job.os }}" == "windows-latest" ]]; then
+          package_path="${staging}.zip"
+          7z a "${package_path}" "${staging}"
+        else
+          package_path="${staging}.tar.gz"
+          tar czf "${package_path}" "${staging}"
+        fi
+        echo "package_path=${package_path}" | tee -a $GITHUB_OUTPUT
+  
+    - uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.package.outputs.package_path }}
+        path: ${{ steps.package.outputs.package_path }}
+
+    # - name: Upload binaries to release
+    #   uses: svenstaro/upload-release-action@2.9.0
+    #   with:
+    #     repo_token: ${{ secrets.GITHUB_TOKEN }}
+    #     file: ${{ steps.package.outputs.package_path }}
+    #     asset_name: ${{ steps.package.outputs.package_path }}
+    #     tag: ${{ github.ref }}
+    #     overwrite: true
