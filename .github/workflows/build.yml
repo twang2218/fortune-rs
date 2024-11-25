@@ -11,7 +11,7 @@ env:
 
 jobs:
   build:
-    name: ${{ matrix.job.target }} (${{ matrix.job.os }})
+    name: 'Build: ${{ matrix.job.target }} (${{ matrix.job.os }})'
     runs-on: ${{ matrix.job.os }}
     strategy:
       fail-fast: false
@@ -117,8 +117,9 @@ jobs:
           pip install pnu-fortune
         fi
         ls -al
-        echo "Update tests/data .dat files to local system"
+        echo "Update tests/{data,data2} .dat files to local system"
         find tests/data -type f ! -name "*.dat" -exec strfile {} \;
+        find tests/data2 -type f ! -name "*.dat" -exec strfile {} \;
 
     - name: Test
       shell: bash

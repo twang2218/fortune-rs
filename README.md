@@ -4,7 +4,7 @@
 [![Crates.io](https://img.shields.io/crates/v/fortune-rs.svg)](https://crates.io/crates/fortune-rs)
 [![Downloads](https://img.shields.io/crates/d/fortune-rs.svg)](https://crates.io/crates/fortune-rs)
 [![Documentation](https://docs.rs/fortune-rs/badge.svg)](https://docs.rs/fortune-rs)
-[![build](https://github.com/twang2218/fortune-rs/actions/workflows/build/badge.svg)](https://github.com/twang2218/fortune-rs/actions)
+[![build](https://github.com/twang2218/fortune-rs/actions/workflows/build.yml/badge.svg)](https://github.com/twang2218/fortune-rs/actions/workflows/build.yml)
 [![codecov](https://codecov.io/gh/twang2218/fortune-rs/branch/main/graph/badge.svg)](https://codecov.io/gh/twang2218/fortune-rs)
 [![dependency status](https://deps.rs/repo/github/twang2218/fortune-rs/status.svg)](https://deps.rs/repo/github/twang2218/fortune-rs)
 [![MSRV](https://img.shields.io/badge/MSRV-1.70.0-blue)](https://blog.rust-lang.org/2023/06/01/Rust-1.70.0.html)
