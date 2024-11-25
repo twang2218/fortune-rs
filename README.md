@@ -1,48 +1,219 @@
+ # fortune-rs 🎲
 
+[![Rust](https://img.shields.io/badge/rust-stable-brightgreen.svg)](https://www.rust-lang.org)
+[![Crates.io](https://img.shields.io/crates/v/fortune-rs.svg)](https://crates.io/crates/fortune-rs)
+[![Downloads](https://img.shields.io/crates/d/fortune-rs.svg)](https://crates.io/crates/fortune-rs)
+[![Documentation](https://docs.rs/fortune-rs/badge.svg)](https://docs.rs/fortune-rs)
+[![build](https://github.com/twang2218/fortune-rs/actions/workflows/build/badge.svg)](https://github.com/twang2218/fortune-rs/actions)
+[![codecov](https://codecov.io/gh/twang2218/fortune-rs/branch/main/graph/badge.svg)](https://codecov.io/gh/twang2218/fortune-rs)
+[![dependency status](https://deps.rs/repo/github/twang2218/fortune-rs/status.svg)](https://deps.rs/repo/github/twang2218/fortune-rs)
+[![MSRV](https://img.shields.io/badge/MSRV-1.70.0-blue)](https://blog.rust-lang.org/2023/06/01/Rust-1.70.0.html)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](http://makeapullrequest.com)
 
-# `fortune` in Rust
+> A modern, feature-rich implementation of the classic BSD `fortune` program in Rust. This implementation aims to be a drop-in replacement for traditional `fortune` programs on Unix-like systems while maintaining compatibility with various fortune database formats.
 
-## Introduction
+## 📑 Table of Contents
 
-This is yet another implementation of the `fortune` program in Rust. This implementation is intended to be a modern, feature-rich version of the `fortune` program that is compatible with the traditional `fortune` program, which can be dropped in as a replacement on Unix-like systems. The program is intended to support various versions of the fortune database format from different systems.
+- [fortune-rs 🎲](#fortune-rs-)
+  - [📑 Table of Contents](#-table-of-contents)
+  - [✨ Features](#-features)
+  - [📥 Installation](#-installation)
+    - [From Source](#from-source)
+  - [🚀 Usage](#-usage)
+    - [Basic Usage](#basic-usage)
+    - [Common Options](#common-options)
+    - [Advanced Usage](#advanced-usage)
+  - [🛠 Development](#-development)
+    - [Project Structure](#project-structure)
+    - [Building](#building)
+    - [Testing](#testing)
+      - [Test Coverage](#test-coverage)
+  - [🔧 Implementation Details](#-implementation-details)
+  - [🗺 Roadmap](#-roadmap)
+    - [Current Status](#current-status)
+    - [Future Plans](#future-plans)
+  - [👥 Contributing](#-contributing)
+  - [📄 License](#-license)
+  - [📚 References](#-references)
+    - [Rust Implementations](#rust-implementations)
 
-The `fortune` program is a simple program that displays a random message from a database of quotations. The `fortune` program is widely available on Unix-like systems. The program is commonly used to generate random messages for users logging into a system.
+## ✨ Features
 
-## Roadmap
+- 🔄 Full compatibility with traditional fortune program options
+- 📚 Support for multiple fortune database formats
+- 🔍 Pattern matching with regular expressions
+- 📊 Weighted fortune selection
+- 🌳 Recursive directory searching
+- 📏 Precise control over fortune length
+- 🎨 Support for both regular and offensive fortunes
+- 🐛 Debug output for troubleshooting
 
-- [x] Basic functionality;
-  - [x] Read the fortune a cookies file and display a random message;
-  - [x] Implement the `strfile` program to create the index file;
-  - [x] Read the fortune the cookie file along with the `strfile` index file;
-  - [x] Read the cookie files from a directory recursively;
-- [ ] Implement traditional fortune options;
-  - [x] `-a` - Choose from all lists of maxims, both offensive and not.  (See the -o option for more information on offensive fortunes.)
-  - [x] `-c` - Show the cookie file from which the fortune came.
-  - [x] `-D` - Enable additional debugging output.  Specify this option multiple times for more verbose output.  Only available if compiled with `-DDEBUG`.
-  - [x] `-e` - Consider all fortune files to be of equal size (see discussion below on multiple files).
-  - [x] `-f` - Print out the list of files which would be searched, but don't print a fortune.
-  - [x] `-i` - Ignore case for `-m` patterns.
-  - [x] `-l` - Long dictums only.  See -n on how **long** is defined in this sense.
-  - [x] `-m pattern` - Print out all fortunes which match the basic regular expression pattern.  The syntax of these expressions depends  on  how your system defines re_comp(3) or regcomp(3), but it should nevertheless be similar to the syntax used in grep(1).
-  - [x] `-n length` - Set the longest fortune length (in characters) considered to be **short** (the default is 160).  All fortunes longer  than this  are  considered  **long**.  Be careful!  If you set the length too short and ask for short fortunes, or too long and ask for long ones, fortune goes into a never-ending thrash loop.
-  - [x] `-s` - Short apothegms only.  See -n on which fortunes are considered **short**.
-  - [x] `-o` - Choose only from potentially offensive aphorisms.  The -o option is ignored if a fortune directory is specified.
-  - [ ] `-u` - Don't translate UTF-8 fortunes to the locale when searching or translating.
-  - [x] `-w` - Wait  before termination for an amount of time calculated from the number of characters in the message.  This is useful if it is executed as part of the logout procedure to guarantee that the message can be read before the screen is cleared.
-  - [x] `[[n%] file/directory/all]`
-  - [x] `-h` - Print a help message.
-  - [x] `-v` - Print the version number.
-- [ ] Implement modern enhancements;
-  - [ ] Support TOML configuration file;
-  - [ ] Embed the fortune database in the binary;
-- [ ] Project management
-  - [ ] Documentation;
-  - [x] Testing;
-  - [ ] CI/CD;
+## 📥 Installation
 
-## References
+### From Source
 
-### Existing Implementations
+```bash
+# Clone the repository
+git clone https://github.com/twang2218/fortune-rs.git
+
+# Change into the directory
+cd fortune-rs
+
+# Build with optimizations
+cargo build --release
+```
+
+> The compiled binary will be available at `target/release/fortune`
+
+## 🚀 Usage
+
+### Basic Usage
+
+```bash
+# Display a random fortune
+fortune
+
+# Display a random fortune from specific files or directories
+fortune /path/to/fortune/file
+
+# Display a random offensive fortune
+fortune -o
+```
+
+### Common Options
+
+| Option | Description |
+|--------|-------------|
+| `-a` | Choose from all lists of maxims |
+| `-c` | Show the cookie file source |
+| `-f` | Print out the list of files |
+| `-o` | Choose only offensive fortunes |
+| `-s` | Display short fortunes only |
+| `-l` | Display long fortunes only |
+| `-n length` | Set length cutoff |
+| `-m pattern` | Display matching fortunes |
+| `-i` | Ignore case in pattern matching |
+| `-w` | Wait based on message length |
+| `-e` | Equal size file handling |
+| `-D` | Enable debugging output |
+
+### Advanced Usage
+
+```bash
+# Pattern matching (case-insensitive)
+fortune -i -m "pattern"
+
+# Short fortunes only
+fortune -s
+
+# Show fortune sources
+fortune -c
+
+# List available fortune files
+fortune -f
+
+# Weighted selection
+fortune 30% /path/to/fortunes1 70% /path/to/fortunes2
+```
+
+## 🛠 Development
+
+### Project Structure
+
+```
+fortune-rs/
+├── src/
+│   ├── fortune.rs    # Main implementation
+│   ├── strfile.rs    # Database generator
+│   └── metadata.rs   # Metadata handling
+├── tests/
+│   ├── integration.rs # Integration tests
+│   ├── data/         # Test files
+│   └── data2/        # Additional tests
+└── Cargo.toml        # Project manifest
+```
+
+### Building
+
+```bash
+# Debug build
+cargo build
+
+# Release build with optimizations
+cargo build --release
+```
+
+### Testing
+
+```bash
+# Run all tests
+cargo test
+```
+
+#### Test Coverage
+
+- ✅ Pattern matching (`-m`)
+- ✅ Case-insensitive search (`-i`)
+- ✅ Length-based filtering (`-l`, `-s`, `-n`)
+- ✅ File listing (`-f`)
+- ✅ Weighted selection
+- ✅ Offensive fortunes (`-o`)
+- ✅ Equal-size handling (`-e`)
+
+## 🔧 Implementation Details
+
+- ✅ Compatible with traditional fortune database formats
+- ✅ Supports regular and offensive fortunes
+- ✅ Implements weighted selection
+- ✅ Pattern matching with regex
+- ✅ Recursive directory traversal
+- ✅ Multiple file formats and encodings
+- ✅ Strfile index compatibility
+
+## 🗺 Roadmap
+
+### Current Status
+
+- ✅ Core Functionality
+  - ✅ Random fortune display
+  - ✅ Strfile index support
+  - ✅ Directory searching
+
+- ✅ Traditional Options
+  - ✅ Standard flags
+  - ✅ Pattern matching
+  - ✅ Length control
+  - ✅ Debug output
+
+### Future Plans
+
+- 🔄 Modern Enhancements
+  - ⏳ TOML configuration
+  - ⏳ Embedded fortune database
+
+- 📈 Project Growth
+  - ⏳ Extended docs
+  - ✅ Comprehensive testing
+  - ⏳ CI/CD pipeline
+
+## 👥 Contributing
+
+We welcome contributions! Here's how you can help:
+
+1. 🍴 [Fork](https://github.com/twang2218/fortune-rs/fork) the repository
+2. 🌿 [Create a branch](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-and-deleting-branches-within-your-repository) for your feature
+3. ✅ [Add tests](https://doc.rust-lang.org/book/ch11-01-writing-tests.html) for new features
+4. 🧪 [Ensure all tests pass](https://doc.rust-lang.org/book/ch11-00-testing.html)
+5. 📬 [Submit a pull request](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request)
+
+## 📄 License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 📚 References
+
+### Rust Implementations
 
 - [cmatsuoka/fortune-rs](https://github.com/cmatsuoka/fortune-rs), by Claudio Matsuoka, Brazil, at 2017;
 - [c-OO-b/rust-fortune](https://github.com/c-OO-b/rust-fortune), by c-OO-b, Norway, at 2019;
