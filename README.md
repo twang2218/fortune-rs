@@ -2,7 +2,6 @@
 
 [![Rust](https://img.shields.io/badge/rust-stable-brightgreen.svg)](https://www.rust-lang.org)
 [![Crates.io](https://img.shields.io/crates/v/fortune-rs.svg)](https://crates.io/crates/fortune-rs)
-[![Downloads](https://img.shields.io/crates/d/fortune-rs.svg)](https://crates.io/crates/fortune-rs)
 [![Documentation](https://docs.rs/fortune-rs/badge.svg)](https://docs.rs/fortune-rs)
 [![build](https://github.com/twang2218/fortune-rs/actions/workflows/build.yml/badge.svg)](https://github.com/twang2218/fortune-rs/actions/workflows/build.yml)
 [![codecov](https://codecov.io/gh/twang2218/fortune-rs/branch/main/graph/badge.svg)](https://codecov.io/gh/twang2218/fortune-rs)

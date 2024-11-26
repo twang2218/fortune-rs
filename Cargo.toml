@@ -12,7 +12,15 @@ readme = "README.md"
 keywords = ["fortune", "quote", "random", "bsd", "command-line", "cli"]
 categories = ["command-line-utilities", "text-processing", "random-data", "utilities"]
 default-run = "fortune"
-
+include = [
+    "src/*",
+    "tests/*",
+    "Cargo.toml",
+    "Cargo.lock",
+    "Cross.toml",
+    "README.md",
+    "LICENSE",
+]
 
 [dependencies]
 anyhow = "1.0"
