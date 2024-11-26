@@ -9,8 +9,8 @@ repository = "https://github.com/twang2218/fortune-rs"
 homepage = "https://github.com/twang2218/fortune-rs"
 documentation = "https://docs.rs/fortune-rs"
 readme = "README.md"
-keywords = ["fortune", "quote", "random", "bsd", "command-line", "cli"]
-categories = ["command-line-utilities", "text-processing", "random-data", "utilities"]
+keywords = ["fortune", "quote", "game", "command-line", "cli"]
+categories = ["command-line-utilities", "text-processing", "games"]
 default-run = "fortune"
 include = [
     "src/*",

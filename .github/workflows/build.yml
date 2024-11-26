@@ -3,6 +3,8 @@ name: build
 on:
   push:
     branches: [ "main" ]
+    tags:
+      - 'v*'
   pull_request:
     branches: [ "main" ]
 
@@ -184,4 +186,9 @@ jobs:
 
     - name: Publish
       shell: bash
-      run: cargo publish
+      run: |
+        cargo metadata --no-deps --format-version 1 | jq '.packages[0] | del(.dependencies)'
+        cargo package --list
+        cargo publish
+      env:
+        CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
