@@ -1,8 +1,9 @@
-pub mod metadata;
+pub mod cookie;
 
 use anyhow::Result;
 use clap::{Arg, Command};
-use metadata::{CookieMetadata, Serializer};
+use cookie::serializer::Serializer;
+use cookie::CookieJar;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use std::io::Write;
@@ -18,7 +19,7 @@ struct Args {
     iflag: bool,      // Ignore case when ordering
     rflag: bool,      // Randomize strings
     xflag: bool,      // Set rotated flag
-    lflag: bool,      // Load and display metadata file
+    lflag: bool,      // Load and display cookie file
     platform: String, // Platform to use for serialization, one of: homebrew, linux, freebsd
 }
 
@@ -119,43 +120,41 @@ fn main() -> Result<()> {
 
     // If -l flag is set, load and display data file
     if cfg.lflag {
-        let data = CookieMetadata::from_dat(&cfg.outfile)?;
+        let data = CookieJar::from_dat(&cfg.outfile)?;
         println!("File: {}", cfg.outfile);
         println!("{}", data);
         return Ok(());
     }
 
     // Parse input cookie file
-    let mut data = CookieMetadata::default();
-    data.delim = cfg.delimch;
-    data.load_from_cookie_file(&cfg.infile)?;
+    let mut jar = CookieJar::from_text_file(&cfg.infile, cfg.delimch)?;
 
     // Apply ordering if -o flag is set
     if cfg.oflag {
-        data.quotes.sort_by(|a, b| {
+        jar.cookies.sort_by(|a, b| {
             if cfg.iflag {
                 a.content.to_lowercase().cmp(&b.content.to_lowercase())
             } else {
                 a.content.cmp(&b.content)
             }
         });
-        data.flags |= metadata::FLAGS_ORDERED;
+        jar.flags |= cookie::FLAGS_ORDERED;
     }
 
     // Randomize if -r flag is set
     if cfg.rflag {
-        data.quotes.shuffle(&mut thread_rng());
-        data.flags |= metadata::FLAGS_RANDOMIZED;
+        jar.cookies.shuffle(&mut thread_rng());
+        jar.flags |= cookie::FLAGS_RANDOMIZED;
     }
 
     // Set rotated flag if -x flag is set
     if cfg.xflag {
-        data.flags |= metadata::FLAGS_ROTATED;
+        jar.flags |= cookie::FLAGS_ROTATED;
     }
 
     // Write output data file
     let bytes = Serializer::to_bytes(
-        &data,
+        &jar,
         Serializer::get_type_by_platform(&cfg.platform.as_str()),
     );
     let mut f = std::fs::OpenOptions::new()
@@ -169,20 +168,20 @@ fn main() -> Result<()> {
     // Display summary unless -s flag is set
     if !cfg.sflag {
         println!("'{}' created", cfg.outfile);
-        if data.quotes.len() == 1 {
+        if jar.cookies.len() == 1 {
             println!("There was 1 string");
         } else {
-            println!("There were {} strings", data.quotes.len());
+            println!("There were {} strings", jar.cookies.len());
         }
         println!(
             "Longest string: {} byte{}",
-            data.max_length,
-            if data.max_length == 1 { "" } else { "s" }
+            jar.max_length,
+            if jar.max_length == 1 { "" } else { "s" }
         );
         println!(
             "Shortest string: {} byte{}",
-            data.min_length,
-            if data.min_length == 1 { "" } else { "s" }
+            jar.min_length,
+            if jar.min_length == 1 { "" } else { "s" }
         );
     }
 

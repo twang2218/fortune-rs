@@ -1,8 +1,8 @@
 use assert_cmd::Command;
 use ctor::ctor;
-use std::{path::PathBuf, process::Command as StdCommand};
-use log::{info, debug};
 use env_logger::Env;
+use log::info;
+use std::{path::PathBuf, process::Command as StdCommand};
 
 const TEST_DATA_PATH: &str = "tests/data";
 
@@ -20,14 +20,14 @@ fn setup() {
 
 #[test]
 fn test_fortune_flag_m() {
-    info!("[current directory]: {:?}", std::env::current_dir().unwrap());
+    info!(
+        "[current directory]: {:?}",
+        std::env::current_dir().unwrap()
+    );
 
-    let testcases = [
-        ("apple", 1, 1),
-        ("the", 3, 1),
-    ];
+    let testcases = [("apple", 1, 1), ("the", 3, 1)];
 
-    for (pattern, expected_num_quotes, expected_num_files) in testcases {
+    for (pattern, expected_num_cookies, expected_num_files) in testcases {
         let args = format!("-m {} {}", pattern, TEST_DATA_PATH);
         // Get reference implementation output
         let ref_output = StdCommand::new("fortune")
@@ -36,7 +36,7 @@ fn test_fortune_flag_m() {
             .expect("msg: failed to execute reference implementation");
         let ref_stdout = String::from_utf8(ref_output.stdout).unwrap();
         let ref_stderr = String::from_utf8(ref_output.stderr).unwrap();
-    
+
         // Get our implementation output
         let output = Command::cargo_bin("fortune")
             .unwrap()
@@ -47,12 +47,12 @@ fn test_fortune_flag_m() {
         let my_stderr = String::from_utf8(output.stderr).unwrap();
 
         // Compare the two outputs
-        let my_num_quotes = my_stdout.matches("\n%").count();
+        let my_num_cookies = my_stdout.matches("\n%").count();
         assert_eq!(
-            expected_num_quotes, my_num_quotes,
-            "`fortune {}` - expected: {} matched quotes, got: {}\n[ref_stdout]:\n{}\n[my_stdout]:\n{}",
+            expected_num_cookies, my_num_cookies,
+            "`fortune {}` - expected: {} matched cookies, got: {}\n[ref_stdout]:\n{}\n[my_stdout]:\n{}",
             args,
-            expected_num_quotes, my_num_quotes,
+            expected_num_cookies, my_num_cookies,
             ref_stdout, my_stdout
         );
         let my_num_files = my_stderr.matches("\n%").count();
@@ -63,20 +63,20 @@ fn test_fortune_flag_m() {
             expected_num_files, my_num_files,
             ref_stderr, my_stderr
         );
-    
-        assert_eq!(ref_stdout, my_stdout,
+
+        assert_eq!(
+            ref_stdout, my_stdout,
             "`fortune {}`\n[ref_stdout]:\n{}\n[my_stdout]:\n{}",
-            args, ref_stdout, my_stdout);
-        assert_eq!(ref_stderr, my_stderr,
+            args, ref_stdout, my_stdout
+        );
+        assert_eq!(
+            ref_stderr, my_stderr,
             "`fortune {}`\n[ref_stderr]:\n{}\n[my_stderr]:\n{}",
-            args, ref_stderr, my_stderr);    
+            args, ref_stderr, my_stderr
+        );
     }
 
-
-    let testcases = [
-        ("apple", true),
-        ("notfound", false),
-    ];
+    let testcases = [("apple", true), ("notfound", false)];
 
     for (patter, result) in testcases {
         let args = format!("-m {} {}", patter, TEST_DATA_PATH);
@@ -94,12 +94,9 @@ fn test_fortune_flag_m() {
 
 #[test]
 fn test_fortune_flag_i_and_m() {
-    let testcases = [
-        ("apple", 5, 1),
-        ("the", 4, 2),
-    ];
+    let testcases = [("apple", 5, 1), ("the", 4, 2)];
 
-    for (pattern, expected_num_quotes, expected_num_files) in testcases {
+    for (pattern, expected_num_cookies, expected_num_files) in testcases {
         let args = format!("-i -m {} {}", pattern, TEST_DATA_PATH);
         // Get reference implementation output
         let ref_output = StdCommand::new("fortune")
@@ -108,7 +105,7 @@ fn test_fortune_flag_i_and_m() {
             .expect("msg: failed to execute reference implementation");
         let ref_stdout = String::from_utf8(ref_output.stdout).unwrap();
         let ref_stderr = String::from_utf8(ref_output.stderr).unwrap();
-    
+
         // Get our implementation output
         let output = Command::cargo_bin("fortune")
             .unwrap()
@@ -117,14 +114,14 @@ fn test_fortune_flag_i_and_m() {
             .expect("msg: failed to execute our implementation");
         let my_stdout = String::from_utf8(output.stdout).unwrap();
         let my_stderr = String::from_utf8(output.stderr).unwrap();
-    
+
         // Compare the two outputs
-        let my_num_quotes = my_stdout.matches("\n%").count();
+        let my_num_cookies = my_stdout.matches("\n%").count();
         assert_eq!(
-            expected_num_quotes, my_num_quotes,
-            "`fortune {}` - expected: {} matched quotes, got: {}\n[ref_stdout]:\n{}\n[my_stdout]:\n{}",
+            expected_num_cookies, my_num_cookies,
+            "`fortune {}` - expected: {} matched cookies, got: {}\n[ref_stdout]:\n{}\n[my_stdout]:\n{}",
             args,
-            expected_num_quotes, my_num_quotes,
+            expected_num_cookies, my_num_cookies,
             ref_stdout, my_stdout
         );
         let my_num_files = my_stderr.matches("\n%").count();
@@ -135,19 +132,20 @@ fn test_fortune_flag_i_and_m() {
             expected_num_files, my_num_files,
             ref_stderr, my_stderr
         );
-    
-        assert_eq!(ref_stdout, my_stdout,
+
+        assert_eq!(
+            ref_stdout, my_stdout,
             "`fortune {}`\n[ref_stdout]:\n{}\n[my_stdout]:\n{}",
-            args, ref_stdout, my_stdout);
-        assert_eq!(ref_stderr, my_stderr,
+            args, ref_stdout, my_stdout
+        );
+        assert_eq!(
+            ref_stderr, my_stderr,
             "`fortune {}`\n[ref_stderr]:\n{}\n[my_stderr]:\n{}",
-            args, ref_stderr, my_stderr);    
+            args, ref_stderr, my_stderr
+        );
     }
 
-    let testcases = [
-        ("apple", true),
-        ("notfound", false),
-    ];
+    let testcases = [("apple", true), ("notfound", false)];
 
     for (patter, result) in testcases {
         let args = format!("-i -m {} {}", patter, TEST_DATA_PATH);
@@ -184,12 +182,16 @@ fn test_fortune_flag_l_and_n() {
     let my_stdout = String::from_utf8(output.stdout).unwrap();
     let my_stderr = String::from_utf8(output.stderr).unwrap();
 
-    assert_eq!(ref_stdout, my_stdout,
+    assert_eq!(
+        ref_stdout, my_stdout,
         "`fortune {}`\n[ref_stdout]:\n{}\n[my_stdout]:\n{}",
-        args, ref_stdout, my_stdout);
-    assert_eq!(ref_stderr, my_stderr,
+        args, ref_stdout, my_stdout
+    );
+    assert_eq!(
+        ref_stderr, my_stderr,
         "`fortune {}`\n[ref_stderr]:\n{}\n[my_stderr]:\n{}",
-        args, ref_stderr, my_stderr);
+        args, ref_stderr, my_stderr
+    );
 }
 
 #[test]
@@ -213,12 +215,16 @@ fn test_fortune_flag_s_and_n() {
     let my_stdout = String::from_utf8(output.stdout).unwrap();
     let my_stderr = String::from_utf8(output.stderr).unwrap();
 
-    assert_eq!(ref_stdout, my_stdout,
+    assert_eq!(
+        ref_stdout, my_stdout,
         "`fortune {}`\n[ref_stdout]:\n{}\n[my_stdout]:\n{}",
-        args, ref_stdout, my_stdout);
-    assert_eq!(ref_stderr, my_stderr,
+        args, ref_stdout, my_stdout
+    );
+    assert_eq!(
+        ref_stderr, my_stderr,
         "`fortune {}`\n[ref_stderr]:\n{}\n[my_stderr]:\n{}",
-        args, ref_stderr, my_stderr);
+        args, ref_stderr, my_stderr
+    );
 }
 
 #[test]
@@ -241,11 +247,16 @@ fn test_fortune_flag_f() {
     let my_stdout = String::from_utf8(output.stdout).unwrap();
     let my_stderr = String::from_utf8(output.stderr).unwrap();
 
-    assert_eq!(ref_stdout, my_stdout,
+    assert_eq!(
+        ref_stdout, my_stdout,
         "`fortune {}`\n[ref_stdout]:\n{}\n[my_stdout]:\n{}",
-        args, ref_stdout, my_stdout);
-    debug!("`fortune {}`\n[ref_stderr]:\n{}\n[my_stderr]:\n{}",
-        args, ref_stderr, my_stderr);
+        args, ref_stdout, my_stdout
+    );
+
+    let msg = format!(
+        "`fortune {}`\n[ref_stderr]:\n{}\n[my_stderr]:\n{}",
+        args, ref_stderr, my_stderr
+    );
 
     //  entry may in any order
     // parse the probability list: probability, path
@@ -277,10 +288,8 @@ fn test_fortune_flag_f() {
         }
         assert!(
             found,
-            "fortune -f {} - cannot find '{}' in '{}'",
-            TEST_DATA_PATH,
-            ref_line,
-            my_stdout
+            "{}\n cannot find '{}' in '{}'",
+            msg, ref_line, my_stdout
         );
     }
 }
@@ -305,16 +314,20 @@ fn test_fortune_flag_f_and_e() {
     let my_stdout = String::from_utf8(output.stdout).unwrap();
     let my_stderr = String::from_utf8(output.stderr).unwrap();
 
-    assert_eq!(ref_stdout, my_stdout,
+    assert_eq!(
+        ref_stdout, my_stdout,
         "`fortune {}`\n[ref_stdout]:\n{}\n[my_stdout]:\n{}",
-        args, ref_stdout, my_stdout);
-    debug!("`fortune {}`\n[ref_stderr]:\n{}\n[my_stderr]:\n{}",
-        args, ref_stderr, my_stderr);
+        args, ref_stdout, my_stdout
+    );
+    let msg = format!(
+        "`fortune {}`\n[ref_stderr]:\n{}\n[my_stderr]:\n{}",
+        args, ref_stderr, my_stderr
+    );
 
     assert_eq!(
         ref_stdout, my_stdout,
-        "`fortune -f -e {}` - [stdout], expected: {}, got: {}",
-        TEST_DATA_PATH, ref_stdout, my_stdout
+        "{}\n [stdout], expected: {}, got: {}",
+        msg, ref_stdout, my_stdout
     );
     //  entry may in any order
     // parse the probability list: probability, path
@@ -346,10 +359,8 @@ fn test_fortune_flag_f_and_e() {
         }
         assert!(
             found,
-            "`fortune {}` - cannot find '{}' in '{}'",
-            args,
-            ref_line,
-            my_stdout
+            "{}\n cannot find '{}' in '{}'",
+            msg, ref_line, my_stdout
         );
     }
 }
@@ -366,34 +377,25 @@ fn test_fortune_flag_c_and_o() {
     let my_stdout = String::from_utf8(output.stdout).unwrap();
     let my_stderr = String::from_utf8(output.stderr).unwrap();
 
-    debug!("`fortune {}`\n[my_stdout]:\n{}\n[my_stderr]:\n{}",
-        args, my_stdout, my_stderr);
+    let msg = format!(
+        "`fortune {}`\n[my_stdout]:\n{}\n[my_stderr]:\n{}",
+        args, my_stdout, my_stderr
+    );
 
-    let first_line = my_stdout.lines().next().unwrap();
-    let second_line = my_stdout.lines().nth(1).unwrap();
-    let third_line = my_stdout.lines().nth(2).unwrap();
+    let expected_lines = ["(off/offensive)", "%", "this is offensive cookie."];
+    let my_lines: Vec<&str> = my_stdout.lines().collect::<Vec<&str>>();
 
-    let path: PathBuf = ["off", "offensive"].iter().collect();
-    let expected_first_line = format!("({})", path.display());
-    assert_eq!(
-        first_line, expected_first_line,
-        "`fortune -c -o {}` - expected first_line: {}, got: {}",
-        TEST_DATA_PATH, expected_first_line, first_line
-    );
-    assert_eq!(
-        second_line, "%",
-        "`fortune -c -o {}` - expected second_line: (on/offensive), got: {}",
-        TEST_DATA_PATH, second_line
-    );
-    assert_eq!(
-        third_line, "this is offensive quote.",
-        "`fortune -c -o {}` - expected third_line: (on/non-offensive), got: {}",
-        TEST_DATA_PATH, third_line
-    );
+    for (i, expected_line) in expected_lines.iter().enumerate() {
+        assert_eq!(
+            *expected_line, my_lines[i],
+            "{}\n expected: '{}', got: '{}'",
+            msg, expected_line, my_lines[i]
+        );
+    }
     assert_eq!(
         my_stderr, "",
-        "`fortune -c -o {}` - expected stderr: empty, got: {}",
-        TEST_DATA_PATH, my_stderr
+        "{} - expected stderr: empty, got: {}",
+        msg, my_stderr
     );
 }
 
@@ -474,18 +476,18 @@ fn test_fortune_flag_probs() {
             .output()
             .expect("msg: failed to execute our implementation");
 
-        let my_stdout = String::from_utf8(output.stdout).unwrap();
+        // let my_stdout = String::from_utf8(output.stdout).unwrap();
         let my_stderr = String::from_utf8(output.stderr).unwrap();
 
-        debug!("`fortune {}`\n[my_stdout]:\n{}\n[my_stderr]:\n{}",
-            args, my_stdout, my_stderr);
-    
+        // Compare the two outputs
         let my_lines: Vec<&str> = my_stderr.lines().map(|l| l.trim()).collect::<Vec<&str>>();
         for expected_line in expected.iter() {
-            assert!(my_lines.contains(expected_line),
-                "`fortune {}`\n[expected_stdout]:\n{}\n[my_stderr]:\n{}",
+            assert!(
+                my_lines.contains(expected_line),
+                "`fortune {}`\n[expected_stderr]:\n{}\n[my_stderr]:\n{}",
                 args,
-                expected.join("\n"), my_stderr
+                expected.join("\n"),
+                my_stderr
             );
         }
     }
