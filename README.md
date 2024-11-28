@@ -1,4 +1,4 @@
- # fortune-rs 🎲
+# fortune-rs 🎲
 
 [![Rust](https://img.shields.io/badge/rust-stable-brightgreen.svg)](https://www.rust-lang.org)
 [![Crates.io](https://img.shields.io/crates/v/fortune-rs.svg)](https://crates.io/crates/fortune-rs)
@@ -47,6 +47,7 @@
 - 📏 Precise control over fortune length
 - 🎨 Support for both regular and offensive fortunes
 - 🐛 Debug output for troubleshooting
+- 📦 Built-in embedded fortune cookies support
 
 ## 📥 Installation
 
@@ -123,14 +124,17 @@ fortune 30% /path/to/fortunes1 70% /path/to/fortunes2
 ```
 fortune-rs/
 ├── src/
-│   ├── fortune.rs    # Main implementation
-│   ├── strfile.rs    # Database generator
-│   └── metadata.rs   # Metadata handling
+│   ├── fortune.rs      # Main program entry
+│   ├── cookie.rs       # Cookie management
+│   ├── strfile.rs      # Database generator
+│   └── cookie/
+│       ├── embed.rs    # Embedded database support
+│       └── serializer.rs # Cookie serialization
 ├── tests/
-│   ├── integration.rs # Integration tests
-│   ├── data/         # Test files
-│   └── data2/        # Additional tests
-└── Cargo.toml        # Project manifest
+│   ├── integration.rs  # Integration tests
+│   ├── data/          # Test files
+│   └── data2/         # Additional tests
+└── Cargo.toml         # Project manifest
 ```
 
 ### Building
@@ -159,6 +163,7 @@ cargo test
 - ✅ Weighted selection
 - ✅ Offensive fortunes (`-o`)
 - ✅ Equal-size handling (`-e`)
+- ✅ Embedded fortune cookies
 
 ## 🔧 Implementation Details
 
@@ -169,6 +174,7 @@ cargo test
 - ✅ Recursive directory traversal
 - ✅ Multiple file formats and encodings
 - ✅ Strfile index compatibility
+- ✅ Embedded fortune cookies
 
 ## 🗺 Roadmap
 
@@ -189,12 +195,12 @@ cargo test
 
 - 🔄 Modern Enhancements
   - ⏳ TOML configuration
-  - ⏳ Embedded fortune database
+  - ✅ Embedded fortune cookies
 
 - 📈 Project Growth
   - ⏳ Extended docs
   - ✅ Comprehensive testing
-  - ⏳ CI/CD pipeline
+  - ✅ CI/CD pipeline
 
 ## 👥 Contributing
 
