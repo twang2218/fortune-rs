@@ -43,6 +43,9 @@ benchmark:
 		"fortune $(args) $(cookies)"
 	rm -rf tmp
 
+coverage:
+	cargo tarpaulin --out Html --output-dir output
+
 clean:
 	rm -rf tmp
 	cargo clean

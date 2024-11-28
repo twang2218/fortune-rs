@@ -2,11 +2,10 @@ pub mod cookie;
 
 use anyhow::{Ok, Result};
 use clap::Parser;
-use cookie::{Cookie, CookieCabinet, CookieSieve};
+use cookie::{embed::Embedded, Cookie, CookieCabinet, CookieSieve};
 use env_logger::Env;
 use log::debug;
 use regex::Regex;
-use std::{path::PathBuf, str::FromStr};
 
 const MIN_WAIT_TIME: u64 = 6;
 const CHARS_PER_SEC: u64 = 20;
@@ -111,14 +110,15 @@ fn main() -> Result<()> {
     // let with_dat = true;
 
     let mut cabinet = CookieCabinet::from_string_list(&args.paths)?;
-    // let path = Path::new(&args.path);
-    // let weighted_paths = parse_weighted_paths(&args.paths)?;
 
-    for shelf in cabinet.iter() {
-        let p = PathBuf::from_str(shelf.location.as_str())?;
-        if !p.exists() {
-            // TODO: search embedded resources
-            anyhow::bail!("{} not found.", p.display());
+    for shelf in cabinet.shelves.iter_mut() {
+        if !std::fs::exists(&shelf.location)? {
+            if Embedded::exists(&shelf.location) {
+                // update shelf location if necessary
+                shelf.location = Embedded::format_path(&shelf.location);
+            } else {
+                anyhow::bail!("{} not found.", shelf.location);
+            }
         }
     }
 

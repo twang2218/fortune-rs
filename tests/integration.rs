@@ -2,7 +2,7 @@ use assert_cmd::Command;
 use ctor::ctor;
 use env_logger::Env;
 use log::info;
-use std::{path::PathBuf, process::Command as StdCommand};
+use std::process::Command as StdCommand;
 
 const TEST_DATA_PATH: &str = "tests/data";
 
@@ -491,4 +491,24 @@ fn test_fortune_flag_probs() {
             );
         }
     }
+}
+
+
+#[test]
+fn test_fortune_embed() {
+    let args = "-c";
+    let output = Command::cargo_bin("fortune")
+        .unwrap()
+        .args(args.split_whitespace().collect::<Vec<&str>>())
+        .output()
+        .expect("msg: failed to execute our implementation");
+
+    let my_stdout = String::from_utf8(output.stdout).unwrap();
+    let my_stderr = String::from_utf8(output.stderr).unwrap();
+    let msg = format!(
+        "`fortune {}`\n[my_stdout]:\n{}\n[my_stderr]:\n{}",
+        args, my_stdout, my_stderr
+    );
+    assert!(my_stdout.len() > 0, "{}\n - expected: non-empty stdout, got: empty", msg);
+    // assert!(my_stderr.len() > 0, "{}\n - expected: non-empty stderr, got: empty", msg);
 }

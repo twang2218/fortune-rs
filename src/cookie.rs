@@ -1,8 +1,10 @@
+pub mod embed;
 pub mod serializer;
 
 use std::path::PathBuf;
 
 use anyhow::Result;
+use embed::{Embedded, EMBED_PREFIX};
 use glob::glob;
 use log::debug;
 use rand::distributions::WeightedIndex;
@@ -198,9 +200,9 @@ pub struct CookieShelf {
 
 #[allow(dead_code)]
 impl CookieShelf {
-    pub fn new(location: String, probability: f64) -> Self {
+    pub fn new(location: &str, probability: f64) -> Self {
         Self {
-            location,
+            location: location.to_string(),
             probability,
             jars: Vec::new(),
         }
@@ -242,48 +244,64 @@ impl CookieShelf {
     pub fn load(&mut self, normal: bool, offensive: bool) -> Result<()> {
         // find jars
         let mut jars: Vec<CookieJar> = Vec::new();
-        let p = PathBuf::from(&self.location);
-        if p.is_file() {
-            jars.push(CookieJar::from_text_file(
-                &self.location,
-                DEFAULT_DELIMITER,
-            )?);
+        if self.location.starts_with(EMBED_PREFIX) {
+            debug!("Loading embedded cookies from: '{}'", self.location);
+
+            let paths = Embedded::find(&self.location)?;
+            for path in paths {
+                let content = Embedded::read_to_string(&path)?;
+                let jar = CookieJar::from_text(&content, &path, DEFAULT_DELIMITER)?;
+                jars.push(jar);
+            }
         } else {
-            let pattern_off_dir =
-                glob::Pattern::new(format!("{}/**/off/*", &self.location).as_str())?;
-            let pattern_off_file =
-                glob::Pattern::new(format!("{}/**/*-o", &self.location).as_str())?;
+            let p = PathBuf::from(&self.location);
+            if p.is_file() {
+                jars.push(CookieJar::from_text_file(
+                    &self.location,
+                    DEFAULT_DELIMITER,
+                )?);
+            } else {
+                let pattern_off_dir = glob::Pattern::new(&format!("{}/**/off/*", &self.location))?;
+                let pattern_off_file = glob::Pattern::new(&format!("{}/**/*-o", &self.location))?;
 
-            let pattern = format!("{}/**/*", &self.location);
-            let files: Vec<String> = glob(pattern.as_str())
-                .expect(format!("Failed to read glob pattern {}", pattern).as_str())
-                .filter_map(Result::ok)
-                .filter(|p| p.is_file())
-                .filter(|p| p.extension().unwrap_or_default() != "dat")
-                .filter(|p| {
-                    if normal && offensive {
-                        return true;
-                    }
-                    if normal {
-                        return !pattern_off_dir.matches_path(p)
-                            && !pattern_off_file.matches_path(p);
-                    }
-                    if offensive {
-                        return pattern_off_dir.matches_path(p) || pattern_off_file.matches_path(p);
-                    }
-                    false
-                })
-                .map(|p| p.to_string_lossy().to_string())
-                .collect();
+                let pattern = format!("{}/**/*", &self.location);
+                let files: Vec<String> = glob(&pattern)
+                    .expect(&format!("Failed to read glob pattern {}", pattern))
+                    .filter_map(Result::ok)
+                    // only keep files
+                    .filter(|p| p.is_file())
+                    // filter out .dat files
+                    .filter(|p| p.extension().unwrap_or_default() != "dat")
+                    // filter out dot files
+                    .filter(|p| !p.file_name().unwrap().to_str().unwrap().starts_with("."))
+                    // filter by normal/offensive
+                    .filter(|p| {
+                        if normal && offensive {
+                            return true;
+                        }
+                        if normal {
+                            return !pattern_off_dir.matches_path(p)
+                                && !pattern_off_file.matches_path(p);
+                        }
+                        if offensive {
+                            return pattern_off_dir.matches_path(p)
+                                || pattern_off_file.matches_path(p);
+                        }
+                        false
+                    })
+                    .map(|p| p.to_string_lossy().to_string())
+                    .collect();
 
-            jars = files
-                .iter()
-                .map(|f| {
-                    let mut jar = CookieJar::from_text_file(f, DEFAULT_DELIMITER).unwrap();
-                    jar.update_location(&self.location);
-                    jar
-                })
-                .collect();
+                jars = files
+                    .iter()
+                    .map(|f| {
+                        let mut jar = CookieJar::from_text_file(f, DEFAULT_DELIMITER)
+                            .expect(&format!("Failed to read cookie file: {}", f));
+                        jar.update_location(&self.location);
+                        jar
+                    })
+                    .collect();
+            }
         }
         self.jars = jars;
         Ok(())
@@ -375,19 +393,24 @@ impl CookieCabinet {
 
     pub fn from_string_list(items: &[String]) -> Result<CookieCabinet> {
         let mut shelves: CookieCabinet = CookieCabinet::default();
-        let mut prob: f64 = 0.0;
-        for item in items {
-            if item.ends_with("%") {
-                // this is the probability for the next shelf
-                prob = item.strip_suffix("%").unwrap().parse::<f64>().unwrap();
-            } else {
-                // check if an probability is given
-                if prob > 0.0 {
-                    shelves.push(CookieShelf::new(item.to_string(), prob));
-                    prob = 0.0;
+        if items.is_empty() {
+            //  use embedded cookies if no shelves are given
+            shelves.push(CookieShelf::new(EMBED_PREFIX, 100.0));
+        } else {
+            let mut prob: f64 = 0.0;
+            for item in items {
+                if item.ends_with("%") {
+                    // this is the probability for the next shelf
+                    prob = item.strip_suffix("%").unwrap().parse::<f64>().unwrap();
                 } else {
-                    // no probability given, default to 0.0, which to be calculated later
-                    shelves.push(CookieShelf::new(item.to_string(), 0.0));
+                    // check if an probability is given
+                    if prob > 0.0 {
+                        shelves.push(CookieShelf::new(item, prob));
+                        prob = 0.0;
+                    } else {
+                        // no probability given, default to 0.0, which to be calculated later
+                        shelves.push(CookieShelf::new(item, 0.0));
+                    }
                 }
             }
         }
@@ -481,7 +504,7 @@ fn trim_parent_path(path: &str, parent: &str) -> String {
 mod tests {
     use std::collections::{HashMap, HashSet};
 
-    use super::CookieShelf;
+    use super::{embed::EMBED_PREFIX, CookieShelf};
     const TEST_DATA_DIR: &str = "tests/data";
 
     // CookieJar tests
@@ -726,7 +749,7 @@ mod tests {
         ];
 
         for (msg, location, probability) in testcases.iter() {
-            let shelf = super::CookieShelf::new(location.to_string(), *probability);
+            let shelf = super::CookieShelf::new(location, *probability);
             assert_eq!(*location, shelf.location, "{}", msg);
             assert_eq!(*probability, shelf.probability, "{}", msg);
             assert_eq!(0, shelf.jars.len(), "{}", msg);
@@ -735,7 +758,7 @@ mod tests {
 
     #[test]
     fn test_cookie_shelf_num_of_cookies() {
-        let mut shelf = super::CookieShelf::new("valley".to_string(), 0.0);
+        let mut shelf = super::CookieShelf::new("valley", 0.0);
         shelf
             .jars
             .push(super::CookieJar::from_text("apple\n%\nbanana\n%", "valley", '%').unwrap());
@@ -750,7 +773,7 @@ mod tests {
 
     #[test]
     fn test_cookie_shelf_num_of_jars() {
-        let mut shelf = super::CookieShelf::new("valley".to_string(), 0.0);
+        let mut shelf = super::CookieShelf::new("valley", 0.0);
         shelf
             .jars
             .push(super::CookieJar::from_text("apple\n%\nbanana\n%", "valley", '%').unwrap());
@@ -798,7 +821,7 @@ mod tests {
 
         for (msg, num_cookies, equal_size, total_prob, expected) in testcases.iter() {
             // create a shelf with given number of cookies
-            let mut shelf = super::CookieShelf::new("valley".to_string(), *total_prob);
+            let mut shelf = super::CookieShelf::new("valley", *total_prob);
             for num in num_cookies.iter() {
                 let mut jar = super::CookieJar::default();
                 for _ in 0..*num {
@@ -858,10 +881,18 @@ mod tests {
                 5,
                 12,
             ),
+            (
+                "should load embedded file",
+                EMBED_PREFIX.to_string() + "en/fortunes",
+                true,
+                true,
+                1,
+                433,
+            ),
         ];
 
         for (msg, location, normal, offensive, num_jars, num_cookies) in testcases.iter() {
-            let mut shelf = super::CookieShelf::new(location.to_string(), 0.0);
+            let mut shelf = super::CookieShelf::new(location, 0.0);
             shelf.load(*normal, *offensive).unwrap();
             assert_eq!(
                 *num_jars,
@@ -914,7 +945,7 @@ mod tests {
         ];
 
         for (msg, filters, num_of_cookies, expected_jar) in testcases.iter() {
-            let mut shelf = CookieShelf::new("tests/data".to_string(), 100.0);
+            let mut shelf = CookieShelf::new("tests/data", 100.0);
             shelf.load(true, true).unwrap();
             let mut sieve = super::CookieSieve::default();
             for filter in filters.iter() {
@@ -952,7 +983,7 @@ mod tests {
         const REPEAT_COUNT: usize = 1000;
         const THRESHOLD: usize = REPEAT_COUNT / 10;
         for jars in testcases.iter() {
-            let mut shelf = super::CookieShelf::new("valley".to_string(), 100.0);
+            let mut shelf = super::CookieShelf::new("valley", 100.0);
             for (content, prob) in jars.iter() {
                 let mut jar = super::CookieJar::from_text(content, content, '%').unwrap();
                 jar.probability = *prob;
@@ -992,7 +1023,7 @@ mod tests {
     #[test]
     fn test_cookie_cabinet_push() {
         let mut cabinet = super::CookieCabinet::new(Vec::new());
-        cabinet.push(super::CookieShelf::new("valley".to_string(), 0.0));
+        cabinet.push(super::CookieShelf::new("valley", 0.0));
         assert_eq!(1, cabinet.shelves.len());
         assert_eq!("valley", cabinet.shelves[0].location);
     }
@@ -1000,8 +1031,8 @@ mod tests {
     #[test]
     fn test_cookie_cabinet_num_of_cookies_and_jars() {
         let mut cabinet = super::CookieCabinet::new(Vec::new());
-        cabinet.push(super::CookieShelf::new("valley".to_string(), 0.0));
-        cabinet.push(super::CookieShelf::new("mountain".to_string(), 0.0));
+        cabinet.push(super::CookieShelf::new("valley", 0.0));
+        cabinet.push(super::CookieShelf::new("mountain", 0.0));
         cabinet.shelves[0]
             .jars
             .push(super::CookieJar::from_text("apple\n%\nbanana\n%", "valley", '%').unwrap());
@@ -1068,7 +1099,7 @@ mod tests {
         for (shelves, (normal, offensive, equal_size), expected_probs) in testcases.iter() {
             let mut cabinet = super::CookieCabinet::default();
             for (location, prob) in shelves.iter() {
-                cabinet.push(super::CookieShelf::new(location.to_string(), *prob));
+                cabinet.push(super::CookieShelf::new(location, *prob));
             }
             cabinet.load(*normal, *offensive).unwrap();
             cabinet.calculate_prob(*equal_size);
@@ -1133,6 +1164,10 @@ mod tests {
                 "tests/data tests/data2",
                 vec![("tests/data", 0.0), ("tests/data2", 0.0)],
             ),
+            (
+                "",
+                vec![(EMBED_PREFIX, 100.0)],
+            )
         ];
 
         for (line, expected) in testcases.iter() {
@@ -1186,8 +1221,8 @@ mod tests {
 
         for (msg, filters, num_of_cookies, expected_jar) in testcases.iter() {
             let mut cabinet = super::CookieCabinet::default();
-            cabinet.push(super::CookieShelf::new("tests/data".to_string(), 100.0));
-            cabinet.push(super::CookieShelf::new("tests/data2".to_string(), 100.0));
+            cabinet.push(super::CookieShelf::new("tests/data", 100.0));
+            cabinet.push(super::CookieShelf::new("tests/data2", 100.0));
             cabinet.load(true, true).unwrap();
             let mut sieve = super::CookieSieve::default();
             for filter in filters.iter() {
@@ -1226,7 +1261,7 @@ mod tests {
         const THRESHOLD: usize = REPEAT_COUNT / 20;
         for jars in testcases.iter() {
             let mut cabinet = super::CookieCabinet::default();
-            cabinet.push(super::CookieShelf::new("valley".to_string(), 100.0));
+            cabinet.push(super::CookieShelf::new("valley", 100.0));
             for (content, prob) in jars.iter() {
                 let mut jar = super::CookieJar::from_text(content, content, '%').unwrap();
                 jar.probability = *prob;

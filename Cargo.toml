@@ -30,6 +30,7 @@ glob = "0.3"
 log = "0.4"
 rand = "0.8"
 regex = "1.10"
+rust-embed = { version = "8.5.0", features = ["include-exclude", "include-flate", "debug-embed", "compression"] }
 
 [dev-dependencies]
 assert_cmd = "2.0.16"
