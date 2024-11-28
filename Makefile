@@ -43,8 +43,17 @@ benchmark:
 		"fortune $(args) $(cookies)"
 	rm -rf tmp
 
+pre-coverage:
+	cargo install cargo-tarpaulin
+
 coverage:
 	cargo tarpaulin --out Html --output-dir output
+
+pre-bloat:
+	cargo install cargo-bloat
+
+bloat:
+	cargo bloat --release --crates --bin fortune -n 50
 
 clean:
 	rm -rf tmp

@@ -7,10 +7,12 @@ use anyhow::Result;
 use embed::{Embedded, EMBED_PREFIX};
 use glob::glob;
 use log::debug;
+use oxilangtag::LanguageTag;
 use rand::distributions::WeightedIndex;
 use rand::prelude::Distribution;
 use rand::seq::SliceRandom;
 use serializer::Serializer;
+use sys_locale::get_locale;
 
 /// Constants defining the data file format and flags
 pub const FLAGS_RANDOMIZED: u64 = 0x0001; /* randomized pointers */
@@ -397,7 +399,26 @@ impl CookieCabinet {
         let mut shelves: CookieCabinet = CookieCabinet::default();
         if items.is_empty() {
             //  use embedded cookies if no shelves are given
-            shelves.push(CookieShelf::new(EMBED_PREFIX, 100.0));
+            // get current language
+            let lang = if let Some(locale) = get_locale() {
+                let tag = LanguageTag::parse(locale.as_str())?;
+                debug!(
+                    "System locale: {}, primary_language: {}, region: {:?}",
+                    locale,
+                    tag.primary_language(),
+                    tag.region(),
+                );
+                tag.primary_language().to_string()
+            } else {
+                "en".to_string()
+            };
+            // check if the language is supported
+            let location = if Embedded::exists(&lang) {
+                format!("{}{}", EMBED_PREFIX, lang)
+            } else {
+                format!("{}{}", EMBED_PREFIX,"en")
+            };
+            shelves.push(CookieShelf::new(&location, 100.0));
         } else {
             let mut prob: f64 = 0.0;
             for item in items {

@@ -108,6 +108,13 @@ fn generate_filters(args: &Args) -> CookieSieve {
 fn main() -> Result<()> {
     let args = Args::parse();
 
+    // Debug output if requested
+    if args.debug {
+        env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
+        debug!("debug output enabled");
+        debug!("args: {:?}", std::env::args().collect::<Vec<_>>());
+    }
+
     let normal = args.all || !args.offensive;
     let offensive = args.all || args.offensive;
     // let with_dat = true;
@@ -124,13 +131,6 @@ fn main() -> Result<()> {
                 anyhow::bail!("{} not found.", shelf.location);
             }
         }
-    }
-
-    // Debug output if requested
-    if args.debug {
-        env_logger::Builder::from_env(Env::default().default_filter_or("debug")).init();
-        debug!("debug output enabled");
-        debug!("args: {:?}", std::env::args().collect::<Vec<_>>());
     }
 
     // Create filters based on command-line arguments
