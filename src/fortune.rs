@@ -2,7 +2,10 @@ pub mod cookie;
 
 use anyhow::{Ok, Result};
 use clap::Parser;
-use cookie::{embed::Embedded, Cookie, CookieCabinet, CookieSieve};
+use cookie::{
+    embed::{Embedded, EMBED_PREFIX},
+    Cookie, CookieCabinet, CookieSieve,
+};
 use env_logger::Env;
 use log::debug;
 use regex::Regex;
@@ -112,7 +115,8 @@ fn main() -> Result<()> {
     let mut cabinet = CookieCabinet::from_string_list(&args.paths)?;
 
     for shelf in cabinet.shelves.iter_mut() {
-        if !std::fs::exists(&shelf.location)? {
+        //  if the shelf location is not point to embedded data and not exists, then check if it exists in embedded data
+        if !shelf.location.starts_with(EMBED_PREFIX) && !std::fs::exists(&shelf.location)? {
             if Embedded::exists(&shelf.location) {
                 // update shelf location if necessary
                 shelf.location = Embedded::format_path(&shelf.location);
