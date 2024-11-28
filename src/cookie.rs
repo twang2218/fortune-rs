@@ -24,6 +24,7 @@ pub const DEFAULT_DELIMITER: char = '%';
 pub struct Cookie {
     pub location: String, // Path to the source file
     pub content: String,  // The actual cookie text
+    pub offset: u64,      // Offset of the cookie in the source file
 }
 
 /// Represents the header structure of a fortune cookie data file.
@@ -119,7 +120,7 @@ impl CookieJar {
             .expect(format!("Error reading cookie database: {}", filename).as_str());
 
         let t = Serializer::get_type_by_bytes(&bytes);
-        let mut data = Serializer::from_bytes(&bytes, t);
+        let mut data = Serializer::from_bytes(&bytes, &t);
         data.location = filename.trim_end_matches(".dat").to_string(); // Remove .dat extension
         Ok(data)
     }
@@ -145,6 +146,7 @@ impl CookieJar {
             .map(|part| Cookie {
                 location: jar.location.clone(),
                 content: part.to_string(),
+                offset: 0, // TODO: offset is not used for text files
             })
             .collect();
         let lengths: Vec<u64> = jar
@@ -156,7 +158,7 @@ impl CookieJar {
         jar.min_length = *lengths.iter().min().unwrap_or(&0);
         jar.file_size = content.len() as u64;
 
-        debug!("load_from_cookie_file(): -> (path: {:?}, platform: {:?}, max_length: {}, min_length: {}, num_cookies: {})",
+        debug!("from_text(): -> (path: {:?}, platform: {:?}, max_length: {}, min_length: {}, num_cookies: {})",
             jar.location, jar.platform, jar.max_length, jar.min_length, jar.cookies.len());
 
         Ok(jar)
@@ -416,7 +418,7 @@ impl CookieCabinet {
         }
         // check if only partial probabilities are given
         let total_prob: f64 = shelves.iter().map(|s| s.probability).sum();
-        if (total_prob - 100.0) > 0.0001 && total_prob > 0.0 {
+        if (total_prob - 100.0).abs() > 0.0001 && total_prob > 0.0 {
             // partial probabilities are given
             anyhow::bail!(
                 "Error: Partial probabilities are given. Total probability: {}",
@@ -504,6 +506,8 @@ fn trim_parent_path(path: &str, parent: &str) -> String {
 mod tests {
     use std::collections::{HashMap, HashSet};
 
+    use crate::cookie::{FLAGS_ORDERED, FLAGS_RANDOMIZED, FLAGS_ROTATED};
+
     use super::{embed::EMBED_PREFIX, CookieShelf};
     const TEST_DATA_DIR: &str = "tests/data";
 
@@ -580,10 +584,7 @@ mod tests {
                 jar.min_length,
                 "{}: cookies: {:?}",
                 msg,
-                jar.cookies
-                    .iter()
-                    .map(|c| &c.content)
-                    .collect::<Vec<&String>>()
+                jar.iter().map(|c| &c.content).collect::<Vec<&String>>()
             );
             assert_eq!(
                 *max_length,
@@ -732,6 +733,49 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_cookie_jar_display() {
+        let jar = super::CookieJar {
+            location: "valley".to_string(),
+            probability: 12.345,
+            platform: "homebrew".to_string(),
+            version: 1,
+            max_length: 10,
+            min_length: 5,
+            flags: FLAGS_ORDERED | FLAGS_RANDOMIZED | FLAGS_ROTATED,
+            delim: '%',
+            file_size: 100,
+            cookies: vec![
+                super::Cookie {
+                    location: "valley".to_string(),
+                    content: "apple".to_string(),
+                    offset: 0,
+                },
+                super::Cookie {
+                    location: "valley".to_string(),
+                    content: "banana".to_string(),
+                    offset: 10,
+                },
+            ],
+        };
+        let output = format!("{}", jar);
+        assert!(output.contains("CookieJar {"), "got: {}", output);
+        assert!(output.contains("location: 'valley'"), "got: {}", output);
+        assert!(output.contains("probability: 12.345"), "got: {}", output);
+        assert!(output.contains("platform: 'homebrew'"), "got: {}", output);
+        assert!(output.contains("version: 1"), "got: {}", output);
+        assert!(output.contains("num_cookies: 2"), "got: {}", output);
+        assert!(output.contains("max_length: 10"), "got: {}", output);
+        assert!(output.contains("min_length: 5"), "got: {}", output);
+        assert!(
+            output.contains("flags: [RANDOM, ORDERED, ROTATED]"),
+            "got: {}",
+            output
+        );
+        assert!(output.contains("delim: '%'"), "got: {}", output);
+        assert!(output.contains("file_size: 100"), "got: {}", output);
+    }
+
     // CookieShelf tests
     #[test]
     fn test_cookie_shelf_new() {
@@ -824,10 +868,11 @@ mod tests {
             let mut shelf = super::CookieShelf::new("valley", *total_prob);
             for num in num_cookies.iter() {
                 let mut jar = super::CookieJar::default();
-                for _ in 0..*num {
+                for i in 0..*num {
                     jar.cookies.push(super::Cookie {
                         location: "valley".to_string(),
                         content: "apple".to_string(),
+                        offset: i * 10,
                     });
                 }
                 shelf.jars.push(jar);
@@ -1164,10 +1209,7 @@ mod tests {
                 "tests/data tests/data2",
                 vec![("tests/data", 0.0), ("tests/data2", 0.0)],
             ),
-            (
-                "",
-                vec![(EMBED_PREFIX, 100.0)],
-            )
+            ("", vec![(EMBED_PREFIX, 100.0)]),
         ];
 
         for (line, expected) in testcases.iter() {
@@ -1182,6 +1224,16 @@ mod tests {
                 assert_eq!(*prob, cabinet.shelves[i].probability);
             }
         }
+
+        //  test error cases
+        let args = "15% tests/data 85% tests/data2 10% tests/data3";
+        assert!(super::CookieCabinet::from_string_list(
+            &args
+                .split_whitespace()
+                .map(|s| s.to_string())
+                .collect::<Vec<String>>()
+        )
+        .is_err());
     }
 
     #[test]

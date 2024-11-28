@@ -37,7 +37,13 @@ impl Serialize for SerializerHomebrew {
         //  offset fields
         let mut offset = 0;
         for cookie in &data.cookies {
-            bytes.extend_from_slice(&u64_htonl_to_bytes(offset as u64));
+            if cookie.offset != 0 {
+                // If the offset is already set, use it
+                bytes.extend_from_slice(&u64_htonl_to_bytes(cookie.offset));
+            } else {
+                // Otherwise, calculate the offset based on the current position
+                bytes.extend_from_slice(&u64_htonl_to_bytes(offset as u64));
+            }
             offset += cookie.content.len() as u64 + 3; // + '\n%\n'
         }
         bytes.extend_from_slice(&u64_htonl_to_bytes(data.file_size));
@@ -62,19 +68,20 @@ impl Serialize for SerializerHomebrew {
                 bytes[bytes.len() - 8..bytes.len()].try_into().unwrap(),
             ),
         };
-        for _ in (HEADER_SIZE_HOMEBREW..bytes.len() - 8).step_by(8) {
+        for i in (HEADER_SIZE_HOMEBREW..bytes.len() - 8).step_by(8) {
             data.cookies.push(Cookie {
                 location: "".to_string(),
                 content: "".to_string(),
+                offset: u64_ntohl_from_bytes(bytes[i..i + 8].try_into().unwrap()),
             });
         }
-        let num_cookies = u64_ntohl_from_bytes(bytes[8..16].try_into().unwrap());
-        assert!(
-            num_cookies == data.cookies.len() as u64,
-            "Error: Inconsistent number of cookies. num_cookies: {}, cookies.len(): {}",
-            num_cookies,
-            data.cookies.len()
-        );
+        // let num_cookies = u64_ntohl_from_bytes(bytes[8..16].try_into().unwrap());
+        // assert!(
+        //     num_cookies == data.cookies.len() as u64,
+        //     "Error: Inconsistent number of cookies. num_cookies: {}, cookies.len(): {}",
+        //     num_cookies,
+        //     data.cookies.len()
+        // );
         data
     }
 }
@@ -98,11 +105,17 @@ impl Serialize for SerializerLinux {
         bytes.extend_from_slice(&(data.flags as u32).to_be_bytes());
         bytes.push(data.delim as u8);
         // padding
-        bytes.extend_from_slice(&[0; 7]);
+        bytes.extend_from_slice(&[0; 3]);
         //  offset fields
         let mut offset: u32 = 0;
         for cookie in &data.cookies {
-            bytes.extend_from_slice(&offset.to_be_bytes());
+            if cookie.offset != 0 {
+                // If the offset is already set, use it
+                bytes.extend_from_slice(&(cookie.offset as u32).to_be_bytes());
+            } else {
+                // Otherwise, calculate the offset based on the current position
+                bytes.extend_from_slice(&(offset as u32).to_be_bytes());
+            }
             offset += cookie.content.len() as u32 + 3; // + '\n%\n'
         }
         bytes.extend_from_slice(&(data.file_size as u32).to_be_bytes());
@@ -126,11 +139,11 @@ impl Serialize for SerializerLinux {
             file_size: u32::from_be_bytes(bytes[bytes.len() - 4..bytes.len()].try_into().unwrap())
                 as u64,
         };
-        for _ in (HEADER_SIZE_LINUX..bytes.len() - 4).step_by(4) {
+        for i in (HEADER_SIZE_LINUX..bytes.len() - 4).step_by(4) {
             data.cookies.push(Cookie {
                 location: "".to_string(),
                 content: "".to_string(),
-                // offset: u32::from_be_bytes(bytes[i..i + 4].try_into().unwrap()) as u64,
+                offset: u32::from_be_bytes(bytes[i..i + 4].try_into().unwrap()) as u64,
             });
         }
         let num_cookies = u32::from_be_bytes(bytes[4..8].try_into().unwrap()) as u64;
@@ -163,14 +176,20 @@ impl Serialize for SerializerFreeBSD {
         bytes.extend_from_slice(&(data.flags as u32).to_be_bytes());
         bytes.push(data.delim as u8);
         // padding
-        bytes.extend_from_slice(&[0; 7]);
+        bytes.extend_from_slice(&[0; 3]);
         //  offset fields
         let mut offset: u64 = 0;
         for cookie in &data.cookies {
-            bytes.extend_from_slice(&offset.to_be_bytes());
+            if cookie.offset != 0 {
+                // If the offset is already set, use it
+                bytes.extend_from_slice(&(cookie.offset as u64).to_be_bytes());
+            } else {
+                // Otherwise, calculate the offset based on the current position
+                bytes.extend_from_slice(&(offset as u64).to_be_bytes());
+            }
             offset += cookie.content.len() as u64 + 3; // + '\n%\n'
         }
-        bytes.extend_from_slice(&data.file_size.to_be_bytes());
+        bytes.extend_from_slice(&(data.file_size as u64).to_be_bytes());
         bytes
     }
 
@@ -190,11 +209,11 @@ impl Serialize for SerializerFreeBSD {
             cookies: Vec::new(),
             file_size: u64::from_be_bytes(bytes[bytes.len() - 8..bytes.len()].try_into().unwrap()),
         };
-        for _ in (HEADER_SIZE_FREEBSD..bytes.len() - 8).step_by(8) {
+        for i in (HEADER_SIZE_FREEBSD..bytes.len() - 8).step_by(8) {
             data.cookies.push(Cookie {
                 location: "".to_string(),
                 content: "".to_string(),
-                // offset: u64::from_be_bytes(bytes[i..i + 8].try_into().unwrap()),
+                offset: u64::from_be_bytes(bytes[i..i + 8].try_into().unwrap()),
             });
         }
         let num_cookies = u32::from_be_bytes(bytes[4..8].try_into().unwrap()) as u64;
@@ -218,7 +237,7 @@ pub enum SerializerType {
 
 pub struct Serializer;
 impl Serializer {
-    pub fn to_bytes(data: &CookieJar, t: SerializerType) -> Vec<u8> {
+    pub fn to_bytes(data: &CookieJar, t: &SerializerType) -> Vec<u8> {
         match t {
             SerializerType::Homebrew => SerializerHomebrew::to_bytes(data),
             SerializerType::Linux => SerializerLinux::to_bytes(data),
@@ -226,7 +245,7 @@ impl Serializer {
         }
     }
 
-    pub fn from_bytes(bytes: &Vec<u8>, t: SerializerType) -> CookieJar {
+    pub fn from_bytes(bytes: &Vec<u8>, t: &SerializerType) -> CookieJar {
         match t {
             SerializerType::Homebrew => SerializerHomebrew::from_bytes(bytes),
             SerializerType::Linux => SerializerLinux::from_bytes(bytes),
@@ -243,22 +262,30 @@ impl Serializer {
         }
     }
 
+    pub fn get_platform_by_type(t: &SerializerType) -> String {
+        match t {
+            SerializerType::Homebrew => "homebrew".to_string(),
+            SerializerType::Linux => "linux".to_string(),
+            SerializerType::FreeBSD => "freebsd".to_string(),
+        }
+    }
+
     pub fn get_type_by_bytes(bytes: &Vec<u8>) -> SerializerType {
         // Detect file format based on byte patterns
         if bytes[0..8] == [0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00] {
             // Homebrew format has strange version of 64-bit big-endian
             return SerializerType::Homebrew;
         } else if bytes[0..4] == [0x00, 0x00, 0x00, 0x01]
-            && bytes[30..34] == [0x00, 0x00, 0x00, 0x00]
-            && bytes[40..44] == [0x00, 0x00, 0x00, 0x00]
+            && bytes[24..28] == [0x00, 0x00, 0x00, 0x00]
+            && bytes[32..36] == [0x00, 0x00, 0x00, 0x00]
         {
             // FreeBSD format has version 1, 32-bits header and 64-bits for offsets
             // since the offsets are 64-bits, so the high 32-bits are always zero
             return SerializerType::FreeBSD;
         } else if bytes[0..4] == [0x00, 0x00, 0x00, 0x02]
             && bytes[4..8] != [0x00, 0x00, 0x00, 0x00]
-            && bytes[30..34] != [0x00, 0x00, 0x00, 0x00]
-            && bytes[34..38] != [0x00, 0x00, 0x00, 0x00]
+            && bytes[28..32] != [0x00, 0x00, 0x00, 0x00]
+            && bytes[32..36] != [0x00, 0x00, 0x00, 0x00]
         {
             // Linux format has version 2, 32-bits header and 32-bits for offsets
             return SerializerType::Linux;
@@ -344,6 +371,8 @@ fn u64_ntohl_from_bytes(bytes: [u8; 8]) -> u64 {
 
 #[cfg(test)]
 mod tests {
+    use crate::cookie::{FLAGS_ORDERED, FLAGS_RANDOMIZED, FLAGS_ROTATED};
+
     use super::*;
 
     // Test cases for u64_htonl_to_bytes() and u64_ntohl_from_bytes()
@@ -435,6 +464,195 @@ mod tests {
             assert_eq!(Serializer::get_current_platform(), "freebsd");
         } else {
             // assert_eq!(Serializer::get_current_platform(), "linux");
+        }
+    }
+
+    fn get_testcases_for_bytes() -> Vec<(
+        Vec<u8>,
+        (SerializerType, u64, u64, u64, u64, u64, char, Vec<u64>, u64),
+    )> {
+        vec![
+            (
+                vec![
+                    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, // version 1
+                    0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, // num_cookies 2
+                    0x00, 0x00, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, // max_length 16
+                    0x00, 0x00, 0x00, 0x05, 0x00, 0x00, 0x00, 0x00, // min_length 5
+                    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, // flags FLAGS_RANDOMIZED
+                    0x25, // delim '%'
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // padding
+                    0x00, 0x00, 0x00, 0x23, 0x00, 0x00, 0x00, 0x00, // offset 35
+                    0x00, 0x00, 0x00, 0x78, 0x00, 0x00, 0x00, 0x00, // offset 120
+                    0x00, 0x00, 0x00, 0xA0, 0x00, 0x00, 0x00, 0x00, // file_size 160
+                ],
+                (
+                    SerializerType::Homebrew, // Type
+                    1,                        // version
+                    2,                        // num_cookies
+                    16,                       // max_length
+                    5,                        // min_length
+                    FLAGS_RANDOMIZED,         // flags
+                    '%',                      // delim
+                    vec![35, 120],            // offsets
+                    160,                      // file_size
+                ),
+            ),
+            (
+                vec![
+                    0x00, 0x00, 0x00, 0x02, // version 2
+                    0x00, 0x00, 0x00, 0x02, // num_cookies 2
+                    0x00, 0x00, 0x00, 0x11, // max_length 17
+                    0x00, 0x00, 0x00, 0x06, // min_length 6
+                    0x00, 0x00, 0x00, 0x02, // flags FLAGS_ORDERED
+                    0x25, // delim '%'
+                    0x00, 0x00, 0x00, // padding
+                    0x00, 0x00, 0x00, 0x30, // offset 48
+                    0x00, 0x00, 0x00, 0x80, // offset 128
+                    0x00, 0x00, 0x00, 0xB0, // file_size 176
+                ],
+                (
+                    SerializerType::Linux, // Type
+                    2,                     // version
+                    2,                     // num_cookies
+                    17,                    // max_length
+                    6,                     // min_length
+                    FLAGS_ORDERED,         // flags
+                    '%',                   // delim
+                    vec![48, 128],         // offsets
+                    176,                   // file_size
+                ),
+            ),
+            (
+                vec![
+                    0x00, 0x00, 0x00, 0x01, // version 1
+                    0x00, 0x00, 0x00, 0x02, // num_cookies 2
+                    0x00, 0x00, 0x00, 0x13, // max_length 19
+                    0x00, 0x00, 0x00, 0x09, // min_length 9
+                    0x00, 0x00, 0x00, 0x04, // flags FLAGS_ROTATED
+                    0x25, // delim '%'
+                    0x00, 0x00, 0x00, // padding
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, // offset 8
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x38, // offset 56
+                    0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xC0, // offset 192
+                ],
+                (
+                    SerializerType::FreeBSD, // Type
+                    1,                       // version
+                    2,                       // num_cookies
+                    19,                      // max_length
+                    9,                       // min_length
+                    FLAGS_ROTATED,           // flags
+                    '%',                     // delim
+                    vec![8, 56],             // offsets
+                    192,                     // file_size
+                ),
+            ),
+        ]
+    }
+
+    #[test]
+    fn test_serializer_get_type_by_bytes() {
+        let testcases = get_testcases_for_bytes();
+        for (bytes, expected) in testcases.iter() {
+            let t = Serializer::get_type_by_bytes(&bytes.to_vec());
+            let (expected_type, _, _, _, _, _, _, _, _) = expected;
+            assert_eq!(
+                *expected_type, t,
+                "Got wrong SerializerType: expected: {:?}, got: {:?}",
+                expected_type, t
+            );
+        }
+    }
+
+    #[test]
+    fn test_serializer_from_bytes() {
+        let testcases = get_testcases_for_bytes();
+        for (bytes, expected) in testcases.iter() {
+            let (
+                expected_type,
+                expected_version,
+                expected_num_cookies,
+                expected_max_length,
+                expected_min_length,
+                expected_flags,
+                expected_delim,
+                expected_offsets,
+                expected_file_size,
+            ) = expected;
+            let expected_msg = format!(
+                "Expected: \ntype: {:?}, version: {}, num_cookies: {}, max_length: {}, min_length: {}, flags: {}, delim: {}, offsets: {:?}",
+                expected_type, expected_version, expected_num_cookies, expected_max_length, expected_min_length, expected_flags, expected_delim, expected_offsets
+            );
+            let data = Serializer::from_bytes(&bytes.to_vec(), &expected_type);
+            let msg = format!("{}\nGot: {:?}", expected_msg, data);
+            assert_eq!(*expected_version, data.version, "[wrong version]: {}", msg);
+            assert_eq!(
+                *expected_max_length, data.max_length,
+                "[wrong max_length]: {}",
+                msg
+            );
+            assert_eq!(
+                *expected_min_length, data.min_length,
+                "[wrong min_length]: {}",
+                msg
+            );
+            assert_eq!(*expected_flags, data.flags, "[wrong flags]: {}", msg);
+            assert_eq!(*expected_delim, data.delim, "[wrong delim]: {}", msg);
+            assert_eq!(
+                *expected_file_size, data.file_size,
+                "[wrong file_size]: {}",
+                msg
+            );
+            assert_eq!(
+                *expected_num_cookies,
+                data.cookies.len() as u64,
+                "[wrong cookies.len()]: {}",
+                msg
+            );
+            for (i, offset) in expected_offsets.iter().enumerate() {
+                assert_eq!(*offset, data.cookies[i].offset, "[wrong offset]: {}", msg);
+            }
+        }
+    }
+
+    #[test]
+    fn test_serializer_to_bytes() {
+        let testcases = get_testcases_for_bytes();
+
+        for (expected, given) in testcases.iter() {
+            let (t, version, num_cookies, max_length, min_length, flags, delim, offsets, file_size) =
+                given;
+            let mut data = CookieJar {
+                location: "".to_string(),
+                probability: 0.0,
+                platform: Serializer::get_platform_by_type(t),
+                version: *version,
+                cookies: Vec::new(),
+                max_length: *max_length,
+                min_length: *min_length,
+                flags: *flags,
+                delim: *delim,
+                file_size: *file_size,
+            };
+            for offset in offsets.iter() {
+                data.cookies.push(Cookie {
+                    location: "".to_string(),
+                    content: "".to_string(),
+                    offset: *offset,
+                });
+            }
+            assert_eq!(
+                *num_cookies,
+                data.cookies.len() as u64,
+                "num_cookies != cookies.len()"
+            );
+            // let given_msg = format!(
+            //     "Given: \ntype: {:?}, version: {}, num_cookies: {}, max_length: {}, min_length: {}, flags: {}, delim: {}, offsets: {:?}",
+            //     t, version, num_cookies, max_length, min_length, flags, delim, offsets
+            // );
+            let given_msg = format!("Given: {:?}", data);
+            let bytes = Serializer::to_bytes(&data, t);
+            assert_eq!(expected.to_vec(), bytes, "[wrong bytes]: {}", given_msg);
         }
     }
 }

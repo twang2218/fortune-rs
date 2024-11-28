@@ -90,11 +90,11 @@ fn getargs() -> Args {
 
     let infile = matches.get_one::<String>("infile").unwrap();
     Args {
-        infile: infile.to_string(),
+        infile: infile.trim_end_matches(".dat").to_string(),
         outfile: matches
             .get_one::<String>("outfile")
             .map(|s| s.to_string())
-            .unwrap_or_else(|| format!("{}.dat", infile)),
+            .unwrap_or_else(|| format!("{}.dat", infile.trim_end_matches(".dat"))),
         delimch: matches
             .get_one::<String>("delimch")
             .map(|s| s.chars().next().unwrap())
@@ -155,7 +155,7 @@ fn main() -> Result<()> {
     // Write output data file
     let bytes = Serializer::to_bytes(
         &jar,
-        Serializer::get_type_by_platform(&cfg.platform.as_str()),
+        &Serializer::get_type_by_platform(&cfg.platform.as_str()),
     );
     let mut f = std::fs::OpenOptions::new()
         .write(true)

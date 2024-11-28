@@ -493,7 +493,6 @@ fn test_fortune_flag_probs() {
     }
 }
 
-
 #[test]
 fn test_fortune_embed() {
     let args = "-c";
@@ -509,6 +508,100 @@ fn test_fortune_embed() {
         "`fortune {}`\n[my_stdout]:\n{}\n[my_stderr]:\n{}",
         args, my_stdout, my_stderr
     );
-    assert!(my_stdout.len() > 0, "{}\n - expected: non-empty stdout, got: empty", msg);
+    assert!(
+        my_stdout.len() > 0,
+        "{}\n - expected: non-empty stdout, got: empty",
+        msg
+    );
     // assert!(my_stderr.len() > 0, "{}\n - expected: non-empty stderr, got: empty", msg);
+}
+
+#[test]
+fn test_fortune_flag_d() {
+    let args = format!("-D {}", TEST_DATA_PATH);
+
+    let output = Command::cargo_bin("fortune")
+        .unwrap()
+        .args(args.split_whitespace().collect::<Vec<&str>>())
+        .output()
+        .expect("msg: failed to execute our implementation");
+
+    let my_stdout = String::from_utf8(output.stdout).unwrap();
+    let my_stderr = String::from_utf8(output.stderr).unwrap();
+
+    let msg = format!(
+        "`fortune {}`\n[my_stdout]:\n{}\n[my_stderr]:\n{}",
+        args, my_stdout, my_stderr
+    );
+
+    assert!(
+        my_stdout.len() > 0,
+        "{}\n - expected: non-empty stdout, got: empty",
+        msg
+    );
+    assert!(
+        my_stderr.len() > 0,
+        "{}\n - expected: non-empty stderr, got: empty",
+        msg
+    );
+    assert!(
+        my_stderr.contains(" DEBUG fortune"),
+        "{}\n - expected: DEBUG log, got: {}",
+        msg,
+        my_stderr
+    );
+}
+
+#[test]
+fn test_strfile() {
+    let args = format!("tests/data/apple tests/data/apple.dat");
+    let ref_output = StdCommand::new("strfile")
+        .args(args.split_whitespace().collect::<Vec<&str>>())
+        .output()
+        .expect("msg: failed to execute reference implementation");
+    //  read the output "tests/data/apple.dat" in bytes
+    let ref_bytes = std::fs::read("tests/data/apple.dat").unwrap();
+    let my_output = Command::cargo_bin("strfile")
+        .unwrap()
+        .args(args.split_whitespace().collect::<Vec<&str>>())
+        .output()
+        .expect("msg: failed to execute our implementation");
+    let my_bytes = std::fs::read("tests/data/apple.dat").unwrap();
+
+    let msg = format!(
+        "`strfile {}`, \n[ref_stdout]:\n{}\n[ref_stderr]:\n{}\n[my_stdout]:\n{}\n[my_stderr]:\n{}",
+        args,
+        String::from_utf8(ref_output.stdout).unwrap(),
+        String::from_utf8(ref_output.stderr).unwrap(),
+        String::from_utf8(my_output.stdout).unwrap(),
+        String::from_utf8(my_output.stderr).unwrap()
+    );
+    assert_eq!(ref_bytes, my_bytes, "{}", msg);
+}
+
+#[test]
+fn test_strfile_flags_l() {
+    let args = format!("-l tests/data/apple");
+
+    let output = Command::cargo_bin("strfile")
+        .unwrap()
+        .args(args.split_whitespace().collect::<Vec<&str>>())
+        .output()
+        .expect("msg: failed to execute our implementation");
+    let my_stdout = String::from_utf8(output.stdout).unwrap();
+    let my_stderr = String::from_utf8(output.stderr).unwrap();
+
+    let msg = format!(
+        "`strfile {}`, \n[my_stdout]:\n{}\n[my_stderr]:\n{}",
+        args, my_stdout, my_stderr
+    );
+
+    assert!(my_stdout.contains("File: tests/data/apple.dat"), "{}", msg);
+    assert!(my_stdout.contains("CookieJar"), "{}", msg);
+    assert!(my_stdout.contains("num_cookies: 5"), "{}", msg);
+    assert!(my_stdout.contains("max_length: 71"), "{}", msg);
+    assert!(my_stdout.contains("min_length: 16"), "{}", msg);
+    assert!(my_stdout.contains("delim: '%'"), "{}", msg);
+    assert!(my_stdout.contains("file_size: 202"), "{}", msg);
+    assert!(my_stdout.contains("flags: []"), "{}", msg);
 }
