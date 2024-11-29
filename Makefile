@@ -17,31 +17,32 @@ run:
 test:
 	RUST_BACKTRACE=all cargo test
 
-build: $(TARGETS)
+build:
+	cargo build --release
+
+pre-cross:
+	cargo install cross --git https://github.com/cross-rs/cross
+	rustup target add $(TARGETS)
+
+cross: $(TARGETS)
 
 $(TARGETS):
 	cross build --release --target $@
 
-pre-build:
-	cargo install cross --git https://github.com/cross-rs/cross
-	rustup target add $(TARGETS)
-
-benchmark:
+benchmark: build
 	$(eval cookies := $(COOKIES_DIR))
-	cargo build --release --target-dir tmp
 	$(eval args := -f)
 	hyperfine -N --warmup 3 \
-		"tmp/release/fortune $(args) $(cookies)" \
+		"target/release/fortune $(args) $(cookies)" \
 		"fortune $(args) $(cookies)"
 	$(eval args := )
 	hyperfine -N --warmup 3 \
-		"tmp/release/fortune $(args) $(cookies)" \
+		"target/release/fortune $(args) $(cookies)" \
 		"fortune $(args) $(cookies)"
 	$(eval args := -i -m lucky)
 	hyperfine -i -N --warmup 3 \
-		"tmp/release/fortune $(args) $(cookies)" \
+		"target/release/fortune $(args) $(cookies)" \
 		"fortune $(args) $(cookies)"
-	rm -rf tmp
 
 pre-coverage:
 	cargo install cargo-tarpaulin

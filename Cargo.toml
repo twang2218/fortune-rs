@@ -25,13 +25,21 @@ include = [
 [dependencies]
 anyhow = "1.0"
 clap = { version = "4.4", features = ["derive"] }
-env_logger = "0.11"
+env_logger = { version = "0.11", default-features = false, features = [
+    "auto-color",
+    "humantime",
+] }
 glob = "0.3"
 log = "0.4"
 oxilangtag = "0.1.5"
 rand = "0.8"
-regex = "1.10"
-rust-embed = { version = "8.5.0", features = ["include-exclude", "include-flate", "debug-embed", "compression"] }
+regex-lite = "0.1.6"
+rust-embed = { version = "8.5.0", features = [
+    "include-exclude",
+    "include-flate",
+    "debug-embed",
+    "compression",
+] }
 sys-locale = "0.3.2"
 
 [dev-dependencies]

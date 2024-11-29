@@ -8,7 +8,7 @@ use cookie::{
 };
 use env_logger::Env;
 use log::debug;
-use regex::Regex;
+use regex_lite::Regex;
 
 const MIN_WAIT_TIME: u64 = 6;
 const CHARS_PER_SEC: u64 = 20;

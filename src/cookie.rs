@@ -400,18 +400,8 @@ impl CookieCabinet {
         if items.is_empty() {
             //  use embedded cookies if no shelves are given
             // get current language
-            let lang = if let Some(locale) = get_locale() {
-                let tag = LanguageTag::parse(locale.as_str())?;
-                debug!(
-                    "System locale: {}, primary_language: {}, region: {:?}",
-                    locale,
-                    tag.primary_language(),
-                    tag.region(),
-                );
-                tag.primary_language().to_string()
-            } else {
-                "en".to_string()
-            };
+            let lang = get_current_language();
+
             // check if the language is supported
             let location = if Embedded::exists(&lang) {
                 format!("{}{}", EMBED_PREFIX, lang)
@@ -495,6 +485,11 @@ impl CookieSieve {
     }
 }
 
+/////////////////////
+/// Helper functions
+/////////////////////
+
+/// Trim parent path from the given path.
 fn trim_parent_path(path: &str, parent: &str) -> String {
     if path == parent {
         return path.to_string();
@@ -519,6 +514,19 @@ fn trim_parent_path(path: &str, parent: &str) -> String {
         .to_string()
 }
 
+/// get the current language
+/// if the system locale is not supported, return "en"
+/// if the system locale is supported, return the primary language
+fn get_current_language() -> String {
+    if let Some(locale) = get_locale() {
+        let tag = LanguageTag::parse(locale.as_str()).unwrap();
+        tag.primary_language().to_string()
+    } else {
+        // fallback to "en" if locale is not available
+        "en".to_string()
+    }
+}
+
 ////////////////
 // Unit tests //
 ////////////////
@@ -526,10 +534,9 @@ fn trim_parent_path(path: &str, parent: &str) -> String {
 #[cfg(test)]
 mod tests {
     use std::collections::{HashMap, HashSet};
-
     use crate::cookie::{FLAGS_ORDERED, FLAGS_RANDOMIZED, FLAGS_ROTATED};
 
-    use super::{embed::EMBED_PREFIX, CookieShelf};
+    use super::{embed::EMBED_PREFIX, CookieShelf, get_current_language};
     const TEST_DATA_DIR: &str = "tests/data";
 
     // CookieJar tests
@@ -1217,6 +1224,7 @@ mod tests {
 
     #[test]
     fn test_cookie_cabinet_from_string_list() {
+        let default_embed = format!("{}{}", EMBED_PREFIX, get_current_language());
         let testcases = [
             (
                 "60% tests/data 40% tests/data2",
@@ -1230,7 +1238,7 @@ mod tests {
                 "tests/data tests/data2",
                 vec![("tests/data", 0.0), ("tests/data2", 0.0)],
             ),
-            ("", vec![(EMBED_PREFIX, 100.0)]),
+            ("", vec![(default_embed.as_str(), 100.0)]),
         ];
 
         for (line, expected) in testcases.iter() {
