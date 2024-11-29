@@ -1,7 +1,6 @@
 pub mod cookie;
 
-use anyhow::{Ok, Result};
-use clap::Parser;
+use argh::FromArgs;
 use cookie::{
     embed::{Embedded, EMBED_PREFIX},
     Cookie, CookieCabinet, CookieSieve,
@@ -13,69 +12,63 @@ use regex_lite::Regex;
 const MIN_WAIT_TIME: u64 = 6;
 const CHARS_PER_SEC: u64 = 20;
 
-#[derive(Parser)]
-#[command(
-    version,
-    about = "A Rust implementation of the classic fortune program"
-)]
+#[derive(FromArgs)]
+/// A Rust implementation of the classic fortune program
 struct Args {
-    /// Choose from all lists of maxims, both offensive and not
-    #[arg(short = 'a')]
+    /// choose from all lists of maxims, both offensive and not
+    #[argh(switch, short = 'a')]
     all: bool,
 
-    /// Show the cookie file from which the fortune came
-    #[arg(short = 'c')]
+    /// show the cookie file from which the fortune came
+    #[argh(switch, short = 'c')]
     show_file: bool,
 
-    /// Enable additional debugging output
-    #[arg(short = 'D', default_value = "false")]
+    /// enable additional debugging output
+    #[argh(switch, short = 'D')]
     debug: bool,
 
-    /// Consider all fortune files to be of equal size
-    #[arg(short = 'e')]
+    /// consider all fortune files to be of equal size
+    #[argh(switch, short = 'e')]
     equal_size: bool,
 
-    /// Print out the list of files which would be searched
-    #[arg(short = 'f')]
+    /// print out the list of files which would be searched
+    #[argh(switch, short = 'f')]
     list_files: bool,
 
-    /// Ignore case for -m patterns
-    #[arg(short = 'i')]
+    /// ignore case for -m patterns
+    #[argh(switch, short = 'i')]
     ignore_case: bool,
 
-    /// Long dictums only
-    #[arg(short = 'l')]
+    /// long dictums only
+    #[argh(switch, short = 'l')]
     long_only: bool,
 
-    /// Print out all fortunes which match the pattern
-    #[arg(short = 'm')]
+    /// print out all fortunes which match the pattern
+    #[argh(option, short = 'm')]
     pattern: Option<String>,
 
-    /// Set the longest fortune length considered to be "short"
-    #[arg(short = 'n', default_value = "160")]
+    /// set the longest fortune length considered to be "short"
+    #[argh(option, short = 'n', default = "160")]
     length: usize,
 
-    /// Short apothegms only
-    #[arg(short = 's')]
+    /// short apothegms only
+    #[argh(switch, short = 's')]
     short_only: bool,
 
-    /// Choose only from potentially offensive aphorisms
-    #[arg(short = 'o')]
+    /// choose only from potentially offensive aphorisms
+    #[argh(switch, short = 'o')]
     offensive: bool,
 
-    /// Don't translate UTF-8 fortunes to the locale
-    #[arg(short = 'u')]
+    /// don't translate UTF-8 fortunes to the locale
+    #[argh(switch, short = 'u')]
     no_utf8_translate: bool,
 
-    /// Wait before termination based on message length
-    #[arg(short = 'w')]
+    /// wait before termination based on message length
+    #[argh(switch, short = 'w')]
     wait: bool,
 
-    /// Only load cookies without loading metadata
-    #[arg(short = 't', long)]
-    text: bool,
-
     /// [[n%] file/directory/all]
+    #[argh(positional)]
     paths: Vec<String>,
 }
 
@@ -105,8 +98,8 @@ fn generate_filters(args: &Args) -> CookieSieve {
     filters
 }
 
-fn main() -> Result<()> {
-    let args = Args::parse();
+fn main() -> anyhow::Result<()> {
+    let args: Args = argh::from_env();
 
     // Debug output if requested
     if args.debug {
@@ -115,9 +108,12 @@ fn main() -> Result<()> {
         debug!("args: {:?}", std::env::args().collect::<Vec<_>>());
     }
 
+    if args.no_utf8_translate {
+        anyhow::bail!("-u is not supported yet.");
+    }
+
     let normal = args.all || !args.offensive;
     let offensive = args.all || args.offensive;
-    // let with_dat = true;
 
     let mut cabinet = CookieCabinet::from_string_list(&args.paths)?;
 

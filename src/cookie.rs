@@ -406,7 +406,7 @@ impl CookieCabinet {
             let location = if Embedded::exists(&lang) {
                 format!("{}{}", EMBED_PREFIX, lang)
             } else {
-                format!("{}{}", EMBED_PREFIX,"en")
+                format!("{}{}", EMBED_PREFIX, "en")
             };
             shelves.push(CookieShelf::new(&location, 100.0));
         } else {
@@ -533,10 +533,10 @@ fn get_current_language() -> String {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::{HashMap, HashSet};
     use crate::cookie::{FLAGS_ORDERED, FLAGS_RANDOMIZED, FLAGS_ROTATED};
+    use std::collections::{HashMap, HashSet};
 
-    use super::{embed::EMBED_PREFIX, CookieShelf, get_current_language};
+    use super::{embed::EMBED_PREFIX, get_current_language, CookieShelf};
     const TEST_DATA_DIR: &str = "tests/data";
 
     // CookieJar tests

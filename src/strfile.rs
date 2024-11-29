@@ -1,138 +1,84 @@
 pub mod cookie;
 
 use anyhow::Result;
-use clap::{Arg, Command};
+use argh::FromArgs;
 use cookie::serializer::Serializer;
 use cookie::CookieJar;
 use rand::seq::SliceRandom;
 use rand::thread_rng;
 use std::io::Write;
 
-/// Configuration options parsed from command line arguments.
-#[derive(Default)]
+#[derive(FromArgs)]
+/// Create a data file for the fortune program.
 struct Args {
-    infile: String,   // Input file path
-    outfile: String,  // Output file path
-    delimch: char,    // Delimiter character
-    sflag: bool,      // Silent mode
-    oflag: bool,      // Order strings
-    iflag: bool,      // Ignore case when ordering
-    rflag: bool,      // Randomize strings
-    xflag: bool,      // Set rotated flag
-    lflag: bool,      // Load and display cookie file
-    platform: String, // Platform to use for serialization, one of: homebrew, linux, freebsd
-}
+    /// input file containing strings separated by delimiter
+    #[argh(positional)]
+    infile: String,
 
-/// Parses command line arguments and returns a Config struct.
-/// Uses clap for argument parsing with support for various options
-/// that control the processing of fortune cookie files.
-fn getargs() -> Args {
-    let matches = Command::new("strfile")
-        .arg(
-            Arg::new("infile")
-                .required(true)
-                .help("Input file containing strings separated by delimiter"),
-        )
-        .arg(
-            Arg::new("outfile")
-                .required(false)
-                .help("Output data file (default: infile.dat)"),
-        )
-        .arg(
-            Arg::new("delimch")
-                .short('c')
-                .value_parser(clap::value_parser!(String))
-                .help("Change delimiting character from '%' to specified character"),
-        )
-        .arg(
-            Arg::new("sflag")
-                .short('s')
-                .action(clap::ArgAction::SetTrue)
-                .help("Silent mode - do not show summary of data processed"),
-        )
-        .arg(
-            Arg::new("oflag")
-                .short('o')
-                .action(clap::ArgAction::SetTrue)
-                .help("Order the strings in alphabetical order"),
-        )
-        .arg(
-            Arg::new("iflag")
-                .short('i')
-                .action(clap::ArgAction::SetTrue)
-                .help("Ignore case when ordering strings"),
-        )
-        .arg(
-            Arg::new("rflag")
-                .short('r')
-                .action(clap::ArgAction::SetTrue)
-                .help("Randomize the order of the strings"),
-        )
-        .arg(
-            Arg::new("xflag")
-                .short('x')
-                .action(clap::ArgAction::SetTrue)
-                .help("Set the rotated bit"),
-        )
-        .arg(
-            Arg::new("lflag")
-                .short('l')
-                .action(clap::ArgAction::SetTrue)
-                .help("Load a data file and display its contents"),
-        )
-        .arg(
-            Arg::new("platform")
-                .long("platform")
-                .value_parser(clap::value_parser!(String))
-                .help("Platform to use for serialization: homebrew, linux, freebsd"),
-        )
-        .get_matches();
+    /// output data file (default: infile.dat)
+    #[argh(positional)]
+    outfile: Option<String>,
 
-    let infile = matches.get_one::<String>("infile").unwrap();
-    Args {
-        infile: infile.trim_end_matches(".dat").to_string(),
-        outfile: matches
-            .get_one::<String>("outfile")
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| format!("{}.dat", infile.trim_end_matches(".dat"))),
-        delimch: matches
-            .get_one::<String>("delimch")
-            .map(|s| s.chars().next().unwrap())
-            .unwrap_or('%'),
-        sflag: matches.get_flag("sflag"),
-        oflag: matches.get_flag("oflag"),
-        iflag: matches.get_flag("iflag"),
-        rflag: matches.get_flag("rflag"),
-        xflag: matches.get_flag("xflag"),
-        lflag: matches.get_flag("lflag"),
-        platform: matches
-            .get_one::<String>("platform")
-            .map(|s| s.to_string())
-            .unwrap_or_else(|| "".to_string()),
-    }
+    /// change delimiting character from '%' to specified character
+    #[argh(option, short = 'c')]
+    delimch: Option<char>,
+
+    /// silent mode - do not show summary of data processed
+    #[argh(switch, short = 's')]
+    sflag: bool,
+
+    /// order the strings in alphabetical order
+    #[argh(switch, short = 'o')]
+    oflag: bool,
+
+    /// ignore case when ordering strings
+    #[argh(switch, short = 'i')]
+    iflag: bool,
+
+    /// randomize the order of the strings
+    #[argh(switch, short = 'r')]
+    rflag: bool,
+
+    /// set the rotated bit
+    #[argh(switch, short = 'x')]
+    xflag: bool,
+
+    /// load a data file and display its contents
+    #[argh(switch, short = 'l')]
+    lflag: bool,
+
+    /// platform to use for serialization: homebrew, linux, freebsd
+    #[argh(option)]
+    platform: Option<String>,
 }
 
 /// Main function that processes fortune cookie files.
 /// Handles command line arguments and orchestrates the file processing.
 fn main() -> Result<()> {
     // Parse command-line arguments
-    let cfg = getargs();
+    let args = argh::from_env::<Args>();
+    let infile = args.infile.trim_end_matches(".dat").to_string();
+    let outfile = args
+        .outfile
+        .unwrap_or_else(|| format!("{}.dat", args.infile.trim_end_matches(".dat")));
+    let delimch = args.delimch.unwrap_or('%');
+    let platform = args.platform.unwrap_or_else(|| "".to_string());
 
     // If -l flag is set, load and display data file
-    if cfg.lflag {
-        let data = CookieJar::from_dat(&cfg.outfile)?;
-        println!("File: {}", cfg.outfile);
+    if args.lflag {
+        let data = CookieJar::from_dat(&outfile)?;
+        println!("File: {}", outfile);
         println!("{}", data);
         return Ok(());
     }
 
     // Parse input cookie file
-    let mut jar = CookieJar::from_text_file(&cfg.infile, cfg.delimch)?;
+    let mut jar = CookieJar::from_text_file(&infile, delimch)?;
 
     // Apply ordering if -o flag is set
-    if cfg.oflag {
+    if args.oflag {
         jar.cookies.sort_by(|a, b| {
-            if cfg.iflag {
+            if args.iflag {
                 a.content.to_lowercase().cmp(&b.content.to_lowercase())
             } else {
                 a.content.cmp(&b.content)
@@ -142,32 +88,29 @@ fn main() -> Result<()> {
     }
 
     // Randomize if -r flag is set
-    if cfg.rflag {
+    if args.rflag {
         jar.cookies.shuffle(&mut thread_rng());
         jar.flags |= cookie::FLAGS_RANDOMIZED;
     }
 
     // Set rotated flag if -x flag is set
-    if cfg.xflag {
+    if args.xflag {
         jar.flags |= cookie::FLAGS_ROTATED;
     }
 
     // Write output data file
-    let bytes = Serializer::to_bytes(
-        &jar,
-        &Serializer::get_type_by_platform(&cfg.platform.as_str()),
-    );
+    let bytes = Serializer::to_bytes(&jar, &Serializer::get_type_by_platform(&platform));
     let mut f = std::fs::OpenOptions::new()
         .write(true)
         .create(true)
         .truncate(true)
-        .open(&cfg.outfile)
-        .expect(format!("Error opening output file: {}", cfg.outfile).as_str());
+        .open(&outfile)
+        .expect(format!("Error opening output file: {}", outfile).as_str());
     f.write_all(&bytes).unwrap();
 
     // Display summary unless -s flag is set
-    if !cfg.sflag {
-        println!("'{}' created", cfg.outfile);
+    if !args.sflag {
+        println!("'{}' created", outfile);
         if jar.cookies.len() == 1 {
             println!("There was 1 string");
         } else {
